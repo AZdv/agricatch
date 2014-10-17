@@ -1,0 +1,8 @@
+application: agricatch
+version: 1runtime: python27
+api_version: 1
+
+
+handlers:
+- url: .*
+  script: main.py

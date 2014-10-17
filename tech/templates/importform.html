@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8" />
+	<title>Importer</title>
+</head>
+<body>
+	<h2>Importer</h2>
+	<div class="import_select">
+		<form action="importform" method="post">{% csrf_token %}
+			{{ form.as_p }}
+			<input type="submit" value="Submit" />
+		</form>
+	</div>
+	<p>
+		{% if response %}
+			Successfully imported from: {{ importer_type }} <br />
+			Days (today=0): {{ num_of_days }} <br />
+			Events Failed to import: {{ failed_objects }} <br />
+			Events Successfully Imported: {{ successful_objects }}
+			
+								
+		{% endif %}
+		
+	</p>
+</body>
+</html>
