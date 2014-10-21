@@ -1,4 +1,4 @@
-agricatch
+![AgriCatch Logo](https://azdv.github.io/agricatch/images/logo.png)
 =========
 
 Data aggregation library for Django
