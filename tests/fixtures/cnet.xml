@@ -1,0 +1,290 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SYNTHETIC FIXTURE. Not a capture of any real feed.
+  Matches an Atom feed's structure: default Atom namespace, <entry> rather than
+  <item>, the link as an attribute, a nested author, and a media:content image.
+  published is deliberately much older than updated, as it is on real evergreen
+  articles, because the importer reads updated for that reason.
+-->
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:media="http://search.yahoo.com/mrss/">
+  <title>Example News (synthetic test feed)</title>
+  <subtitle>Fabricated entries for the agricatch test suite.</subtitle>
+  <updated>2026-08-07T12:00:00Z</updated>
+  <id>https://example-news.test/</id>
+  <link rel="alternate" type="text/html" href="https://example-news.test/"/>
+  <entry>
+    <author><name>Ada Lovelace</name></author>
+    <title type="html">Widget 1: a made-up Atom headline</title>
+    <link rel="alternate" type="text/html" href="https://example-news.test/tech/widget-1/"/>
+    <id>2000</id>
+    <updated>2026-08-07T12:00:00Z</updated>
+    <published>2026-07-08T12:00:00Z</published>
+    <category scheme="https://example-news.test" term="Testing"/>
+    <summary type="html">Invented Atom summary number 1.</summary>
+    <media:content url="https://example-news.test/img/widget-1.jpg" medium="image" width="1200" height="800"/>
+  </entry>
+  <entry>
+    <author><name>Grace Hopper</name></author>
+    <title type="html">Gadget 2: a made-up Atom headline</title>
+    <link rel="alternate" type="text/html" href="https://example-news.test/tech/gadget-2/"/>
+    <id>2001</id>
+    <updated>2026-08-07T11:00:00Z</updated>
+    <published>2026-07-08T11:00:00Z</published>
+    <category scheme="https://example-news.test" term="Testing"/>
+    <summary type="html">Invented Atom summary number 2.</summary>
+    <media:content url="https://example-news.test/img/gadget-2.jpg" medium="image" width="1200" height="800"/>
+  </entry>
+  <entry>
+    <author><name>Alan Turing</name></author>
+    <title type="html">Platform 3: a made-up Atom headline</title>
+    <link rel="alternate" type="text/html" href="https://example-news.test/tech/platform-3/"/>
+    <id>2002</id>
+    <updated>2026-08-07T10:00:00Z</updated>
+    <published>2026-07-08T10:00:00Z</published>
+    <category scheme="https://example-news.test" term="Testing"/>
+    <summary type="html">Invented Atom summary number 3.</summary>
+    <media:content url="https://example-news.test/img/platform-3.jpg" medium="image" width="1200" height="800"/>
+  </entry>
+  <entry>
+    <author><name>Barbara Liskov</name></author>
+    <title type="html">Protocol 4: a made-up Atom headline</title>
+    <link rel="alternate" type="text/html" href="https://example-news.test/tech/protocol-4/"/>
+    <id>2003</id>
+    <updated>2026-08-07T09:00:00Z</updated>
+    <published>2026-07-08T09:00:00Z</published>
+    <category scheme="https://example-news.test" term="Testing"/>
+    <summary type="html">Invented Atom summary number 4.</summary>
+    <media:content url="https://example-news.test/img/protocol-4.jpg" medium="image" width="1200" height="800"/>
+  </entry>
+  <entry>
+    <author><name>Ken Thompson</name></author>
+    <title type="html">Runtime 5: a made-up Atom headline</title>
+    <link rel="alternate" type="text/html" href="https://example-news.test/tech/runtime-5/"/>
+    <id>2004</id>
+    <updated>2026-08-07T08:00:00Z</updated>
+    <published>2026-07-08T08:00:00Z</published>
+    <category scheme="https://example-news.test" term="Testing"/>
+    <summary type="html">Invented Atom summary number 5.</summary>
+    <media:content url="https://example-news.test/img/runtime-5.jpg" medium="image" width="1200" height="800"/>
+  </entry>
+  <entry>
+    <author><name>Radia Perlman</name></author>
+    <title type="html">Toolkit 6: a made-up Atom headline</title>
+    <link rel="alternate" type="text/html" href="https://example-news.test/tech/toolkit-6/"/>
+    <id>2005</id>
+    <updated>2026-08-07T07:00:00Z</updated>
+    <published>2026-07-08T07:00:00Z</published>
+    <category scheme="https://example-news.test" term="Testing"/>
+    <summary type="html">Invented Atom summary number 6.</summary>
+    <media:content url="https://example-news.test/img/toolkit-6.jpg" medium="image" width="1200" height="800"/>
+  </entry>
+  <entry>
+    <author><name>Edsger Dijkstra</name></author>
+    <title type="html">Pipeline 7: a made-up Atom headline</title>
+    <link rel="alternate" type="text/html" href="https://example-news.test/tech/pipeline-7/"/>
+    <id>2006</id>
+    <updated>2026-08-07T06:00:00Z</updated>
+    <published>2026-07-08T06:00:00Z</published>
+    <category scheme="https://example-news.test" term="Testing"/>
+    <summary type="html">Invented Atom summary number 7.</summary>
+    <media:content url="https://example-news.test/img/pipeline-7.jpg" medium="image" width="1200" height="800"/>
+  </entry>
+  <entry>
+    <author><name>Margaret Hamilton</name></author>
+    <title type="html">Compiler 8: a made-up Atom headline</title>
+    <link rel="alternate" type="text/html" href="https://example-news.test/tech/compiler-8/"/>
+    <id>2007</id>
+    <updated>2026-08-07T05:00:00Z</updated>
+    <published>2026-07-08T05:00:00Z</published>
+    <category scheme="https://example-news.test" term="Testing"/>
+    <summary type="html">Invented Atom summary number 8.</summary>
+    <media:content url="https://example-news.test/img/compiler-8.jpg" medium="image" width="1200" height="800"/>
+  </entry>
+  <entry>
+    <author><name>Ada Lovelace</name></author>
+    <title type="html">Scheduler 9: a made-up Atom headline</title>
+    <link rel="alternate" type="text/html" href="https://example-news.test/tech/scheduler-9/"/>
+    <id>2008</id>
+    <updated>2026-08-07T04:00:00Z</updated>
+    <published>2026-07-08T04:00:00Z</published>
+    <category scheme="https://example-news.test" term="Testing"/>
+    <summary type="html">Invented Atom summary number 9.</summary>
+    <media:content url="https://example-news.test/img/scheduler-9.jpg" medium="image" width="1200" height="800"/>
+  </entry>
+  <entry>
+    <author><name>Grace Hopper</name></author>
+    <title type="html">Renderer 10: a made-up Atom headline</title>
+    <link rel="alternate" type="text/html" href="https://example-news.test/tech/renderer-10/"/>
+    <id>2009</id>
+    <updated>2026-08-07T03:00:00Z</updated>
+    <published>2026-07-08T03:00:00Z</published>
+    <category scheme="https://example-news.test" term="Testing"/>
+    <summary type="html">Invented Atom summary number 10.</summary>
+    <media:content url="https://example-news.test/img/renderer-10.jpg" medium="image" width="1200" height="800"/>
+  </entry>
+  <entry>
+    <author><name>Alan Turing</name></author>
+    <title type="html">Indexer 11: a made-up Atom headline</title>
+    <link rel="alternate" type="text/html" href="https://example-news.test/tech/indexer-11/"/>
+    <id>2010</id>
+    <updated>2026-08-07T02:00:00Z</updated>
+    <published>2026-07-08T02:00:00Z</published>
+    <category scheme="https://example-news.test" term="Testing"/>
+    <summary type="html">Invented Atom summary number 11.</summary>
+    <media:content url="https://example-news.test/img/indexer-11.jpg" medium="image" width="1200" height="800"/>
+  </entry>
+  <entry>
+    <author><name>Barbara Liskov</name></author>
+    <title type="html">Daemon 12: a made-up Atom headline</title>
+    <link rel="alternate" type="text/html" href="https://example-news.test/tech/daemon-12/"/>
+    <id>2011</id>
+    <updated>2026-08-07T01:00:00Z</updated>
+    <published>2026-07-08T01:00:00Z</published>
+    <category scheme="https://example-news.test" term="Testing"/>
+    <summary type="html">Invented Atom summary number 12.</summary>
+    <media:content url="https://example-news.test/img/daemon-12.jpg" medium="image" width="1200" height="800"/>
+  </entry>
+  <entry>
+    <author><name>Ken Thompson</name></author>
+    <title type="html">Kernel 13: a made-up Atom headline</title>
+    <link rel="alternate" type="text/html" href="https://example-news.test/tech/kernel-13/"/>
+    <id>2012</id>
+    <updated>2026-08-07T00:00:00Z</updated>
+    <published>2026-07-08T00:00:00Z</published>
+    <category scheme="https://example-news.test" term="Testing"/>
+    <summary type="html">Invented Atom summary number 13.</summary>
+    <media:content url="https://example-news.test/img/kernel-13.jpg" medium="image" width="1200" height="800"/>
+  </entry>
+  <entry>
+    <author><name>Radia Perlman</name></author>
+    <title type="html">Sandbox 14: a made-up Atom headline</title>
+    <link rel="alternate" type="text/html" href="https://example-news.test/tech/sandbox-14/"/>
+    <id>2013</id>
+    <updated>2026-08-06T23:00:00Z</updated>
+    <published>2026-07-07T23:00:00Z</published>
+    <category scheme="https://example-news.test" term="Testing"/>
+    <summary type="html">Invented Atom summary number 14.</summary>
+    <media:content url="https://example-news.test/img/sandbox-14.jpg" medium="image" width="1200" height="800"/>
+  </entry>
+  <entry>
+    <author><name>Edsger Dijkstra</name></author>
+    <title type="html">Registry 15: a made-up Atom headline</title>
+    <link rel="alternate" type="text/html" href="https://example-news.test/tech/registry-15/"/>
+    <id>2014</id>
+    <updated>2026-08-06T22:00:00Z</updated>
+    <published>2026-07-07T22:00:00Z</published>
+    <category scheme="https://example-news.test" term="Testing"/>
+    <summary type="html">Invented Atom summary number 15.</summary>
+    <media:content url="https://example-news.test/img/registry-15.jpg" medium="image" width="1200" height="800"/>
+  </entry>
+  <entry>
+    <author><name>Margaret Hamilton</name></author>
+    <title type="html">Adapter 16: a made-up Atom headline</title>
+    <link rel="alternate" type="text/html" href="https://example-news.test/tech/adapter-16/"/>
+    <id>2015</id>
+    <updated>2026-08-06T21:00:00Z</updated>
+    <published>2026-07-07T21:00:00Z</published>
+    <category scheme="https://example-news.test" term="Testing"/>
+    <summary type="html">Invented Atom summary number 16.</summary>
+    <media:content url="https://example-news.test/img/adapter-16.jpg" medium="image" width="1200" height="800"/>
+  </entry>
+  <entry>
+    <author><name>Ada Lovelace</name></author>
+    <title type="html">Harness 17: a made-up Atom headline</title>
+    <link rel="alternate" type="text/html" href="https://example-news.test/tech/harness-17/"/>
+    <id>2016</id>
+    <updated>2026-08-06T20:00:00Z</updated>
+    <published>2026-07-07T20:00:00Z</published>
+    <category scheme="https://example-news.test" term="Testing"/>
+    <summary type="html">Invented Atom summary number 17.</summary>
+    <media:content url="https://example-news.test/img/harness-17.jpg" medium="image" width="1200" height="800"/>
+  </entry>
+  <entry>
+    <author><name>Grace Hopper</name></author>
+    <title type="html">Bundler 18: a made-up Atom headline</title>
+    <link rel="alternate" type="text/html" href="https://example-news.test/tech/bundler-18/"/>
+    <id>2017</id>
+    <updated>2026-08-06T19:00:00Z</updated>
+    <published>2026-07-07T19:00:00Z</published>
+    <category scheme="https://example-news.test" term="Testing"/>
+    <summary type="html">Invented Atom summary number 18.</summary>
+    <media:content url="https://example-news.test/img/bundler-18.jpg" medium="image" width="1200" height="800"/>
+  </entry>
+  <entry>
+    <author><name>Alan Turing</name></author>
+    <title type="html">Profiler 19: a made-up Atom headline</title>
+    <link rel="alternate" type="text/html" href="https://example-news.test/tech/profiler-19/"/>
+    <id>2018</id>
+    <updated>2026-08-06T18:00:00Z</updated>
+    <published>2026-07-07T18:00:00Z</published>
+    <category scheme="https://example-news.test" term="Testing"/>
+    <summary type="html">Invented Atom summary number 19.</summary>
+    <media:content url="https://example-news.test/img/profiler-19.jpg" medium="image" width="1200" height="800"/>
+  </entry>
+  <entry>
+    <author><name>Barbara Liskov</name></author>
+    <title type="html">Emitter 20: a made-up Atom headline</title>
+    <link rel="alternate" type="text/html" href="https://example-news.test/tech/emitter-20/"/>
+    <id>2019</id>
+    <updated>2026-08-06T17:00:00Z</updated>
+    <published>2026-07-07T17:00:00Z</published>
+    <category scheme="https://example-news.test" term="Testing"/>
+    <summary type="html">Invented Atom summary number 20.</summary>
+    <media:content url="https://example-news.test/img/emitter-20.jpg" medium="image" width="1200" height="800"/>
+  </entry>
+  <entry>
+    <author><name>Ken Thompson</name></author>
+    <title type="html">Cache 21: a made-up Atom headline</title>
+    <link rel="alternate" type="text/html" href="https://example-news.test/tech/cache-21/"/>
+    <id>2020</id>
+    <updated>2026-08-06T16:00:00Z</updated>
+    <published>2026-07-07T16:00:00Z</published>
+    <category scheme="https://example-news.test" term="Testing"/>
+    <summary type="html">Invented Atom summary number 21.</summary>
+    <media:content url="https://example-news.test/img/cache-21.jpg" medium="image" width="1200" height="800"/>
+  </entry>
+  <entry>
+    <author><name>Radia Perlman</name></author>
+    <title type="html">Buffer 22: a made-up Atom headline</title>
+    <link rel="alternate" type="text/html" href="https://example-news.test/tech/buffer-22/"/>
+    <id>2021</id>
+    <updated>2026-08-06T15:00:00Z</updated>
+    <published>2026-07-07T15:00:00Z</published>
+    <category scheme="https://example-news.test" term="Testing"/>
+    <summary type="html">Invented Atom summary number 22.</summary>
+    <media:content url="https://example-news.test/img/buffer-22.jpg" medium="image" width="1200" height="800"/>
+  </entry>
+  <entry>
+    <author><name>Edsger Dijkstra</name></author>
+    <title type="html">Router 23: a made-up Atom headline</title>
+    <link rel="alternate" type="text/html" href="https://example-news.test/tech/router-23/"/>
+    <id>2022</id>
+    <updated>2026-08-06T14:00:00Z</updated>
+    <published>2026-07-07T14:00:00Z</published>
+    <category scheme="https://example-news.test" term="Testing"/>
+    <summary type="html">Invented Atom summary number 23.</summary>
+    <media:content url="https://example-news.test/img/router-23.jpg" medium="image" width="1200" height="800"/>
+  </entry>
+  <entry>
+    <author><name>Margaret Hamilton</name></author>
+    <title type="html">Parser 24: a made-up Atom headline</title>
+    <link rel="alternate" type="text/html" href="https://example-news.test/tech/parser-24/"/>
+    <id>2023</id>
+    <updated>2026-08-06T13:00:00Z</updated>
+    <published>2026-07-07T13:00:00Z</published>
+    <category scheme="https://example-news.test" term="Testing"/>
+    <summary type="html">Invented Atom summary number 24.</summary>
+    <media:content url="https://example-news.test/img/parser-24.jpg" medium="image" width="1200" height="800"/>
+  </entry>
+  <entry>
+    <author><name>Ada Lovelace</name></author>
+    <title type="html">Linter 25: a made-up Atom headline</title>
+    <link rel="alternate" type="text/html" href="https://example-news.test/tech/linter-25/"/>
+    <id>2024</id>
+    <updated>2026-08-06T12:00:00Z</updated>
+    <published>2026-07-07T12:00:00Z</published>
+    <category scheme="https://example-news.test" term="Testing"/>
+    <summary type="html">Invented Atom summary number 25.</summary>
+    <media:content url="https://example-news.test/img/linter-25.jpg" medium="image" width="1200" height="800"/>
+  </entry>
+</feed>

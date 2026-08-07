@@ -1,0 +1,215 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SYNTHETIC FIXTURE. Not a capture of any real feed.
+  Written to match the structure of an RSS 2.0 feed exactly - <link> as element
+  text (which an HTML parser silently drops), dc:creator in its namespace,
+  RFC-822 pubDate - so the importer tests exercise real feed shape without
+  redistributing anybody's content.
+-->
+<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/">
+<channel>
+  <title>Example Gadgets (synthetic test feed)</title>
+  <link>https://example-gadgets.test/</link>
+  <description>Fabricated entries for the agricatch test suite.</description>
+  <item>
+    <title>Widget 1: a made-up headline for testing</title>
+    <link>https://example-gadgets.test/2026/08/widget-1/</link>
+    <dc:creator><![CDATA[Ada Lovelace]]></dc:creator>
+    <pubDate>Fri, 07 Aug 2026 12:00:00 +0000</pubDate>
+    <category><![CDATA[Testing]]></category>
+    <guid isPermaLink="false">https://example-gadgets.test/?p=1000</guid>
+    <description><![CDATA[Invented summary number 1. This fixture exists to pin the
+      shape of an RSS 2.0 feed, not to reproduce anyone's writing.]]></description>
+  </item>
+  <item>
+    <title>Gadget 2: a made-up headline for testing</title>
+    <link>https://example-gadgets.test/2026/08/gadget-2/</link>
+    <dc:creator><![CDATA[Grace Hopper]]></dc:creator>
+    <pubDate>Fri, 07 Aug 2026 11:00:00 +0000</pubDate>
+    <category><![CDATA[Testing]]></category>
+    <guid isPermaLink="false">https://example-gadgets.test/?p=1001</guid>
+    <description><![CDATA[Invented summary number 2. This fixture exists to pin the
+      shape of an RSS 2.0 feed, not to reproduce anyone's writing.]]></description>
+  </item>
+  <item>
+    <title>Platform 3: a made-up headline for testing</title>
+    <link>https://example-gadgets.test/2026/08/platform-3/</link>
+    <dc:creator><![CDATA[Alan Turing]]></dc:creator>
+    <pubDate>Fri, 07 Aug 2026 10:00:00 +0000</pubDate>
+    <category><![CDATA[Testing]]></category>
+    <guid isPermaLink="false">https://example-gadgets.test/?p=1002</guid>
+    <description><![CDATA[Invented summary number 3. This fixture exists to pin the
+      shape of an RSS 2.0 feed, not to reproduce anyone's writing.]]></description>
+  </item>
+  <item>
+    <title>Protocol 4: a made-up headline for testing</title>
+    <link>https://example-gadgets.test/2026/08/protocol-4/</link>
+    <dc:creator><![CDATA[Barbara Liskov]]></dc:creator>
+    <pubDate>Fri, 07 Aug 2026 09:00:00 +0000</pubDate>
+    <category><![CDATA[Testing]]></category>
+    <guid isPermaLink="false">https://example-gadgets.test/?p=1003</guid>
+    <description><![CDATA[Invented summary number 4. This fixture exists to pin the
+      shape of an RSS 2.0 feed, not to reproduce anyone's writing.]]></description>
+  </item>
+  <item>
+    <title>Runtime 5: a made-up headline for testing</title>
+    <link>https://example-gadgets.test/2026/08/runtime-5/</link>
+    <dc:creator><![CDATA[Ken Thompson]]></dc:creator>
+    <pubDate>Fri, 07 Aug 2026 08:00:00 +0000</pubDate>
+    <category><![CDATA[Testing]]></category>
+    <guid isPermaLink="false">https://example-gadgets.test/?p=1004</guid>
+    <description><![CDATA[Invented summary number 5. This fixture exists to pin the
+      shape of an RSS 2.0 feed, not to reproduce anyone's writing.]]></description>
+  </item>
+  <item>
+    <title>Toolkit 6: a made-up headline for testing</title>
+    <link>https://example-gadgets.test/2026/08/toolkit-6/</link>
+    <dc:creator><![CDATA[Radia Perlman]]></dc:creator>
+    <pubDate>Fri, 07 Aug 2026 07:00:00 +0000</pubDate>
+    <category><![CDATA[Testing]]></category>
+    <guid isPermaLink="false">https://example-gadgets.test/?p=1005</guid>
+    <description><![CDATA[Invented summary number 6. This fixture exists to pin the
+      shape of an RSS 2.0 feed, not to reproduce anyone's writing.]]></description>
+  </item>
+  <item>
+    <title>Pipeline 7: a made-up headline for testing</title>
+    <link>https://example-gadgets.test/2026/08/pipeline-7/</link>
+    <dc:creator><![CDATA[Edsger Dijkstra]]></dc:creator>
+    <pubDate>Fri, 07 Aug 2026 06:00:00 +0000</pubDate>
+    <category><![CDATA[Testing]]></category>
+    <guid isPermaLink="false">https://example-gadgets.test/?p=1006</guid>
+    <description><![CDATA[Invented summary number 7. This fixture exists to pin the
+      shape of an RSS 2.0 feed, not to reproduce anyone's writing.]]></description>
+  </item>
+  <item>
+    <title>Compiler 8: a made-up headline for testing</title>
+    <link>https://example-gadgets.test/2026/08/compiler-8/</link>
+    <dc:creator><![CDATA[Margaret Hamilton]]></dc:creator>
+    <pubDate>Fri, 07 Aug 2026 05:00:00 +0000</pubDate>
+    <category><![CDATA[Testing]]></category>
+    <guid isPermaLink="false">https://example-gadgets.test/?p=1007</guid>
+    <description><![CDATA[Invented summary number 8. This fixture exists to pin the
+      shape of an RSS 2.0 feed, not to reproduce anyone's writing.]]></description>
+  </item>
+  <item>
+    <title>Scheduler 9: a made-up headline for testing</title>
+    <link>https://example-gadgets.test/2026/08/scheduler-9/</link>
+    <dc:creator><![CDATA[Ada Lovelace]]></dc:creator>
+    <pubDate>Fri, 07 Aug 2026 04:00:00 +0000</pubDate>
+    <category><![CDATA[Testing]]></category>
+    <guid isPermaLink="false">https://example-gadgets.test/?p=1008</guid>
+    <description><![CDATA[Invented summary number 9. This fixture exists to pin the
+      shape of an RSS 2.0 feed, not to reproduce anyone's writing.]]></description>
+  </item>
+  <item>
+    <title>Renderer 10: a made-up headline for testing</title>
+    <link>https://example-gadgets.test/2026/08/renderer-10/</link>
+    <dc:creator><![CDATA[Grace Hopper]]></dc:creator>
+    <pubDate>Fri, 07 Aug 2026 03:00:00 +0000</pubDate>
+    <category><![CDATA[Testing]]></category>
+    <guid isPermaLink="false">https://example-gadgets.test/?p=1009</guid>
+    <description><![CDATA[Invented summary number 10. This fixture exists to pin the
+      shape of an RSS 2.0 feed, not to reproduce anyone's writing.]]></description>
+  </item>
+  <item>
+    <title>Indexer 11: a made-up headline for testing</title>
+    <link>https://example-gadgets.test/2026/08/indexer-11/</link>
+    <dc:creator><![CDATA[Alan Turing]]></dc:creator>
+    <pubDate>Fri, 07 Aug 2026 02:00:00 +0000</pubDate>
+    <category><![CDATA[Testing]]></category>
+    <guid isPermaLink="false">https://example-gadgets.test/?p=1010</guid>
+    <description><![CDATA[Invented summary number 11. This fixture exists to pin the
+      shape of an RSS 2.0 feed, not to reproduce anyone's writing.]]></description>
+  </item>
+  <item>
+    <title>Daemon 12: a made-up headline for testing</title>
+    <link>https://example-gadgets.test/2026/08/daemon-12/</link>
+    <dc:creator><![CDATA[Barbara Liskov]]></dc:creator>
+    <pubDate>Fri, 07 Aug 2026 01:00:00 +0000</pubDate>
+    <category><![CDATA[Testing]]></category>
+    <guid isPermaLink="false">https://example-gadgets.test/?p=1011</guid>
+    <description><![CDATA[Invented summary number 12. This fixture exists to pin the
+      shape of an RSS 2.0 feed, not to reproduce anyone's writing.]]></description>
+  </item>
+  <item>
+    <title>Kernel 13: a made-up headline for testing</title>
+    <link>https://example-gadgets.test/2026/08/kernel-13/</link>
+    <dc:creator><![CDATA[Ken Thompson]]></dc:creator>
+    <pubDate>Fri, 07 Aug 2026 00:00:00 +0000</pubDate>
+    <category><![CDATA[Testing]]></category>
+    <guid isPermaLink="false">https://example-gadgets.test/?p=1012</guid>
+    <description><![CDATA[Invented summary number 13. This fixture exists to pin the
+      shape of an RSS 2.0 feed, not to reproduce anyone's writing.]]></description>
+  </item>
+  <item>
+    <title>Sandbox 14: a made-up headline for testing</title>
+    <link>https://example-gadgets.test/2026/08/sandbox-14/</link>
+    <dc:creator><![CDATA[Radia Perlman]]></dc:creator>
+    <pubDate>Thu, 06 Aug 2026 23:00:00 +0000</pubDate>
+    <category><![CDATA[Testing]]></category>
+    <guid isPermaLink="false">https://example-gadgets.test/?p=1013</guid>
+    <description><![CDATA[Invented summary number 14. This fixture exists to pin the
+      shape of an RSS 2.0 feed, not to reproduce anyone's writing.]]></description>
+  </item>
+  <item>
+    <title>Registry 15: a made-up headline for testing</title>
+    <link>https://example-gadgets.test/2026/08/registry-15/</link>
+    <dc:creator><![CDATA[Edsger Dijkstra]]></dc:creator>
+    <pubDate>Thu, 06 Aug 2026 22:00:00 +0000</pubDate>
+    <category><![CDATA[Testing]]></category>
+    <guid isPermaLink="false">https://example-gadgets.test/?p=1014</guid>
+    <description><![CDATA[Invented summary number 15. This fixture exists to pin the
+      shape of an RSS 2.0 feed, not to reproduce anyone's writing.]]></description>
+  </item>
+  <item>
+    <title>Adapter 16: a made-up headline for testing</title>
+    <link>https://example-gadgets.test/2026/08/adapter-16/</link>
+    <dc:creator><![CDATA[Margaret Hamilton]]></dc:creator>
+    <pubDate>Thu, 06 Aug 2026 21:00:00 +0000</pubDate>
+    <category><![CDATA[Testing]]></category>
+    <guid isPermaLink="false">https://example-gadgets.test/?p=1015</guid>
+    <description><![CDATA[Invented summary number 16. This fixture exists to pin the
+      shape of an RSS 2.0 feed, not to reproduce anyone's writing.]]></description>
+  </item>
+  <item>
+    <title>Harness 17: a made-up headline for testing</title>
+    <link>https://example-gadgets.test/2026/08/harness-17/</link>
+    <dc:creator><![CDATA[Ada Lovelace]]></dc:creator>
+    <pubDate>Thu, 06 Aug 2026 20:00:00 +0000</pubDate>
+    <category><![CDATA[Testing]]></category>
+    <guid isPermaLink="false">https://example-gadgets.test/?p=1016</guid>
+    <description><![CDATA[Invented summary number 17. This fixture exists to pin the
+      shape of an RSS 2.0 feed, not to reproduce anyone's writing.]]></description>
+  </item>
+  <item>
+    <title>Bundler 18: a made-up headline for testing</title>
+    <link>https://example-gadgets.test/2026/08/bundler-18/</link>
+    <dc:creator><![CDATA[Grace Hopper]]></dc:creator>
+    <pubDate>Thu, 06 Aug 2026 19:00:00 +0000</pubDate>
+    <category><![CDATA[Testing]]></category>
+    <guid isPermaLink="false">https://example-gadgets.test/?p=1017</guid>
+    <description><![CDATA[Invented summary number 18. This fixture exists to pin the
+      shape of an RSS 2.0 feed, not to reproduce anyone's writing.]]></description>
+  </item>
+  <item>
+    <title>Profiler 19: a made-up headline for testing</title>
+    <link>https://example-gadgets.test/2026/08/profiler-19/</link>
+    <dc:creator><![CDATA[Alan Turing]]></dc:creator>
+    <pubDate>Thu, 06 Aug 2026 18:00:00 +0000</pubDate>
+    <category><![CDATA[Testing]]></category>
+    <guid isPermaLink="false">https://example-gadgets.test/?p=1018</guid>
+    <description><![CDATA[Invented summary number 19. This fixture exists to pin the
+      shape of an RSS 2.0 feed, not to reproduce anyone's writing.]]></description>
+  </item>
+  <item>
+    <title>Emitter 20: a made-up headline for testing</title>
+    <link>https://example-gadgets.test/2026/08/emitter-20/</link>
+    <dc:creator><![CDATA[Barbara Liskov]]></dc:creator>
+    <pubDate>Thu, 06 Aug 2026 17:00:00 +0000</pubDate>
+    <category><![CDATA[Testing]]></category>
+    <guid isPermaLink="false">https://example-gadgets.test/?p=1019</guid>
+    <description><![CDATA[Invented summary number 20. This fixture exists to pin the
+      shape of an RSS 2.0 feed, not to reproduce anyone's writing.]]></description>
+  </item>
+</channel>
+</rss>
