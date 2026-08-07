@@ -55,8 +55,10 @@ class Article(models.Model):
         blank=True,
     )
 
-    # The identity of an article for de-duplication purposes.
-    HASH_FIELDS = ("name", "link", "time")
+    # The identity of an article for de-duplication purposes. website is part of
+    # it because link is allowed to be blank: without it, two sites running the
+    # same headline at the same time would hash alike and overwrite each other.
+    HASH_FIELDS = ("website", "name", "link", "time")
 
     class Meta:
         db_table = "article"
@@ -86,5 +88,9 @@ class Article(models.Model):
             value = getter(name)
             if isinstance(value, datetime.datetime):
                 value = value.isoformat()
+            elif isinstance(value, Website):
+                # The slug, not __str__, so renaming a site does not re-key
+                # every article it ever produced.
+                value = value.slug
             parts.append("" if value is None else str(value))
         return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()
