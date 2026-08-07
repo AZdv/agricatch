@@ -146,31 +146,60 @@ geocode("Berlin")  # Location(name='Berlin', latitude=52.52, ..., country='DE')
 geocode("Paris", country="US")  # the one in Texas
 ```
 
-The index is built from a [GeoNames](https://download.geonames.org/export/dump/)
-extract (CC BY 4.0) and lives in `geodata/`, which is gitignored — it is derived
-data, and rebuilding it is one command. Lookups are pure standard library: no
-network, no API key, no third-party package. Names fold across case and accents,
-ambiguous names resolve to the most populous match unless you pass `country`, and
-a longer string falls back to its comma-separated parts, so `"Kreuzberg, Berlin"`
-still finds Berlin.
+`geocode()` goes through a cache, then OpenStreetMap, then the offline dataset.
 
-`--alternates` indexes local spellings, so `München`, `Firenze`, `Moskva` and
-`東京` resolve. It costs 2.9 MB instead of 0.7 MB and about a second of load time.
+Geocoding runs at import time rather than query time, and an aggregator keeps
+meeting the same venues, so every distinct place costs exactly one network call
+for the lifetime of the database. Results land in `GeocodeCache`; misses are
+cached too, or every run re-asks about the places that will never resolve. Pass
+`refresh=True` to re-ask anyway.
 
-**What it will not do is street addresses or venues.** That needs OpenAddresses or
-a full OSM extract — hundreds of gigabytes, not something to ship in a repo. When
-you need that precision, `NominatimGeocoder` asks OpenStreetMap instead. It needs
-the network and is rate limited to one call a second by OSM's usage policy.
+That ordering matters because **precision decides which queries mean anything.**
+At city resolution every venue in Berlin collapses onto one point — measured mean
+error 7.9 km, max 14.9 km — so "near Hamburg vs Berlin" works and "within 5 km of
+me" is meaningless. OpenStreetMap resolves the actual address; the offline set is
+the floor underneath it, for regions and for when the network is gone.
 
-```python
-from agricatch.geocode import NominatimGeocoder, geocode
+| Layer | Precision | Needs |
+|---|---|---|
+| `GeocodeCache` | whatever resolved it | nothing, after the first call |
+| `NominatimGeocoder` | exact address | network, 1 call/sec |
+| `OfflineGeocoder` | city / region | the `geodata/` index |
 
-geocode("Berghain, Berlin", geocoder=NominatimGeocoder())
-```
+The offline index comes from a [GeoNames](https://download.geonames.org/export/dump/)
+extract (CC BY 4.0) and lives in gitignored `geodata/` — derived data, rebuilt in
+one command. Those lookups are pure standard library: no network, no key, no
+package. Names fold across case and accents, ambiguous ones resolve to the most
+populous match unless you pass `country`, and a long string falls back to its
+comma-separated parts so `"Kreuzberg, Berlin"` still finds Berlin. `--alternates`
+adds local spellings (`München`, `Firenze`, `東京`) for 2.9 MB instead of 0.7 MB.
+
+Seeding is the slow part: public Nominatim answers in roughly 20 seconds, so a few
+hundred venues is a couple of hours, once, in the background. After that it is a
+dictionary lookup.
 
 Nothing in `tech` calls this — articles have no location. It is here for
 location-bearing importers, which is where it came from. Use it from an importer's
 `hydrate()`, since one lookup fills two columns.
+
+## Distance queries
+
+No PostGIS. A bounding box narrows the candidates on an ordinary index, then the
+trigonometry runs on what is left.
+
+```python
+from agricatch.geodistance import annotate_distance, filter_within
+
+filter_within(Venue.objects.all(), 52.4990, 13.4180, radius_km=3)
+annotate_distance(Venue.objects.all(), 52.4990, 13.4180).order_by("distance")
+```
+
+Both return querysets annotated with `distance` in kilometres, nearest first, so
+they chain like anything else. `haversine()` is there for two points you already
+hold. Pass `lat_field` / `lon_field` if your columns are named differently.
+
+The box is padded by a fraction of a millimetre: it has to be a superset, because
+anything it drops never reaches the distance check.
 
 ## Tests
 
