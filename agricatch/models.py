@@ -4,7 +4,14 @@ The domain models live in the app named by ``AGRICATCH_APP``; this holds only
 what the library itself needs.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from django.db import models
+
+if TYPE_CHECKING:
+    from agricatch.geocode import Location
 
 
 class GeocodeCache(models.Model):
@@ -40,14 +47,18 @@ class GeocodeCache(models.Model):
         ]
         indexes = [models.Index(fields=["latitude", "longitude"])]
 
-    def __str__(self):
+    def __str__(self) -> str:
         if not self.found:
             return f"{self.query} (not found)"
         return f"{self.name} ({self.latitude}, {self.longitude})"
 
-    def as_location(self):
-        """Return the cached :class:`~agricatch.geocode.Location`, or None for a miss."""
-        if not self.found:
+    def as_location(self) -> Location | None:
+        """Return the cached :class:`~agricatch.geocode.Location`, or None for a miss.
+
+        A row marked found but missing coordinates is treated as a miss rather
+        than handed back as a location at (None, None).
+        """
+        if not self.found or self.latitude is None or self.longitude is None:
             return None
 
         from agricatch.geocode import Location

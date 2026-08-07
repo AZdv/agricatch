@@ -1,8 +1,10 @@
 """Distance filtering, exercised against the geocode cache's own coordinates."""
 
 from math import asin, atan2, cos, degrees, radians, sin
+from typing import Any
 
 import pytest
+from django.db.models import QuerySet
 
 from agricatch.geodistance import (
     EARTH_RADIUS_KM,
@@ -29,7 +31,7 @@ PLACES = {
 
 
 @pytest.fixture
-def places(db):
+def places(db: None) -> QuerySet[GeocodeCache]:
     for name, (lat, lon) in PLACES.items():
         GeocodeCache.objects.create(
             key=name.lower(), query=name, name=name, latitude=lat, longitude=lon, found=True
@@ -41,21 +43,23 @@ def places(db):
 # ---- pure maths ------------------------------------------------------
 
 
-def test_haversine_against_known_distances():
+def test_haversine_against_known_distances() -> None:
     assert haversine(*BERLIN, *HAMBURG) == pytest.approx(255, abs=5)
     assert haversine(*BERLIN, *PARIS) == pytest.approx(878, abs=8)
     assert haversine(*BERLIN, *SYDNEY) == pytest.approx(16096, abs=60)
 
 
-def test_haversine_is_zero_for_the_same_point():
+def test_haversine_is_zero_for_the_same_point() -> None:
     assert haversine(*BERLIN, *BERLIN) == pytest.approx(0, abs=1e-9)
 
 
-def test_haversine_is_symmetric():
+def test_haversine_is_symmetric() -> None:
     assert haversine(*BERLIN, *PARIS) == pytest.approx(haversine(*PARIS, *BERLIN))
 
 
-def destination(latitude, longitude, distance_km, bearing_degrees):
+def destination(
+    latitude: float, longitude: float, distance_km: float, bearing_degrees: float
+) -> tuple[float, float]:
     """Where you end up travelling ``distance_km`` on a given bearing."""
     angular = distance_km / EARTH_RADIUS_KM
     bearing = radians(bearing_degrees)
@@ -68,7 +72,7 @@ def destination(latitude, longitude, distance_km, bearing_degrees):
 
 
 @pytest.mark.parametrize("radius", [1, 50, 500])
-def test_bounding_box_contains_everything_within_the_radius(radius):
+def test_bounding_box_contains_everything_within_the_radius(radius: int) -> None:
     """The invariant that makes the prefilter safe: the box may over-select, never under-select."""
     min_lat, max_lat, min_lon, max_lon = bounding_box(*BERLIN, radius)
     for bearing in range(0, 360, 15):
@@ -77,14 +81,14 @@ def test_bounding_box_contains_everything_within_the_radius(radius):
         assert min_lon <= lon <= max_lon, f"bearing {bearing} escaped the box in longitude"
 
 
-def test_bounding_box_widens_towards_the_poles():
+def test_bounding_box_widens_towards_the_poles() -> None:
     """A degree of longitude covers less ground the further north you go."""
     _, _, equator_min, equator_max = bounding_box(0.0, 0.0, 100)
     _, _, arctic_min, arctic_max = bounding_box(80.0, 0.0, 100)
     assert (arctic_max - arctic_min) > (equator_max - equator_min)
 
 
-def test_bounding_box_gives_up_at_the_pole():
+def test_bounding_box_gives_up_at_the_pole() -> None:
     _, _, min_lon, max_lon = bounding_box(90.0, 0.0, 100)
     assert (min_lon, max_lon) == (-180.0, 180.0)
 
@@ -92,49 +96,49 @@ def test_bounding_box_gives_up_at_the_pole():
 # ---- queryset helpers ------------------------------------------------
 
 
-def test_annotate_distance_matches_the_python_calculation(places):
-    row = annotate_distance(places, *BERLIN).get(key="paris")
+def test_annotate_distance_matches_the_python_calculation(places: QuerySet[GeocodeCache]) -> None:
+    row: Any = annotate_distance(places, *BERLIN).get(key="paris")
     assert row.distance == pytest.approx(haversine(*BERLIN, *PARIS), rel=1e-6)
 
 
-def test_distance_to_itself_is_zero(places):
-    row = annotate_distance(places, *BERLIN).get(key="berlin")
+def test_distance_to_itself_is_zero(places: QuerySet[GeocodeCache]) -> None:
+    row: Any = annotate_distance(places, *BERLIN).get(key="berlin")
     assert row.distance == pytest.approx(0, abs=1e-6)
 
 
-def test_filter_within_keeps_only_what_is_close(places):
+def test_filter_within_keeps_only_what_is_close(places: QuerySet[GeocodeCache]) -> None:
     names = set(filter_within(places, *BERLIN, 50).values_list("name", flat=True))
     assert names == {"Berlin", "Potsdam", "Brandenburg Gate"}
 
 
-def test_filter_within_widens_correctly(places):
+def test_filter_within_widens_correctly(places: QuerySet[GeocodeCache]) -> None:
     names = set(filter_within(places, *BERLIN, 300).values_list("name", flat=True))
     assert "Hamburg" in names
     assert "Paris" not in names
 
 
-def test_results_come_back_nearest_first(places):
+def test_results_come_back_nearest_first(places: QuerySet[GeocodeCache]) -> None:
     ordered = list(filter_within(places, *BERLIN, 1000).values_list("name", flat=True))
     assert ordered[0] == "Berlin"
     assert ordered.index("Potsdam") < ordered.index("Hamburg") < ordered.index("Paris")
 
 
-def test_rows_without_coordinates_are_excluded(places):
+def test_rows_without_coordinates_are_excluded(places: QuerySet[GeocodeCache]) -> None:
     assert "nowhere" not in set(filter_within(places, *BERLIN, 20000).values_list("key", flat=True))
 
 
-def test_a_radius_that_reaches_nothing_returns_empty(places):
+def test_a_radius_that_reaches_nothing_returns_empty(places: QuerySet[GeocodeCache]) -> None:
     assert not filter_within(places, *BERLIN, 0.001).exclude(key="berlin").exists()
 
 
-def test_antimeridian_does_not_lose_results(places):
+def test_antimeridian_does_not_lose_results(places: QuerySet[GeocodeCache]) -> None:
     """A box spanning the date line cannot be one range; the trig must still work."""
     near_dateline = (-33.8688, 179.9)
     found = filter_within(places, *near_dateline, 3000)
     assert "Sydney" in set(found.values_list("name", flat=True))
 
 
-def test_filter_within_still_returns_a_queryset(places):
+def test_filter_within_still_returns_a_queryset(places: QuerySet[GeocodeCache]) -> None:
     """Chaining has to keep working, so this must not collapse to a list."""
     result = filter_within(places, *BERLIN, 300).filter(name__startswith="Pots")
     assert [row.name for row in result] == ["Potsdam"]

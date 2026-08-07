@@ -5,11 +5,15 @@ it is one command. See https://download.geonames.org/export/dump/ for the
 available extracts; they are CC BY 4.0.
 """
 
+from __future__ import annotations
+
 import csv
 import gzip
 import io
 import zipfile
+from argparse import ArgumentParser
 from pathlib import Path
+from typing import Any
 
 import httpx
 from django.core.management.base import BaseCommand, CommandError
@@ -31,7 +35,7 @@ DATASETS = {
 class Command(BaseCommand):
     help = "Download a GeoNames extract and build the offline geocoding index."
 
-    def add_arguments(self, parser):
+    def add_arguments(self, parser: ArgumentParser) -> None:
         parser.add_argument(
             "--dataset",
             default="cities15000",
@@ -45,7 +49,7 @@ class Command(BaseCommand):
             help="also index alternate names (bigger, but matches local spellings)",
         )
 
-    def handle(self, *args, **options):
+    def handle(self, *args: Any, **options: Any) -> None:
         dataset = options["dataset"]
         output = Path(options["output"] or DEFAULT_DATASET)
         url = f"{BASE_URL}/{dataset}.zip"
@@ -71,7 +75,7 @@ class Command(BaseCommand):
             self.style.SUCCESS(f"Wrote {len(rows)} keys to {output} ({size_mb:.1f} MB)")
         )
 
-    def build_rows(self, raw, include_alternates=False):
+    def build_rows(self, raw: str, include_alternates: bool = False) -> list[dict[str, str]]:
         """Flatten the extract into one row per searchable name.
 
         Distinct places that share a name each keep their own row - there are

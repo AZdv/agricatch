@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 import datetime
 import hashlib
+from typing import Any
 
 from django.db import models
 from django.urls import reverse
@@ -14,7 +17,7 @@ class Website(models.Model):
         db_table = "website"
         ordering = ["slug"]
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name or self.slug
 
 
@@ -25,7 +28,7 @@ class Author(models.Model):
         db_table = "author"
         ordering = ["name"]
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
 
@@ -63,19 +66,19 @@ class Article(models.Model):
             models.Index(fields=["-added_at"]),
         ]
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
-    def save(self, *args, **kwargs):
+    def save(self, *args: Any, **kwargs: Any) -> None:
         if not self.content_hash:
             self.content_hash = self.build_hash(self)
         super().save(*args, **kwargs)
 
-    def get_absolute_url(self):
+    def get_absolute_url(self) -> str:
         return reverse("tech:article", args=[self.pk])
 
     @classmethod
-    def build_hash(cls, values):
+    def build_hash(cls, values: dict[str, Any] | Article) -> str:
         """Stable digest of the identity fields, from a dict or a model instance."""
         getter = values.get if isinstance(values, dict) else lambda k: getattr(values, k, None)
         parts = []

@@ -31,6 +31,8 @@ No importer in ``tech`` calls this - articles have no location. It is here for
 location-bearing importers, which is where it came from.
 """
 
+from __future__ import annotations
+
 import csv
 import gzip
 import logging
@@ -38,8 +40,9 @@ import re
 import threading
 import time
 import unicodedata
+from collections.abc import Sequence
 from pathlib import Path
-from typing import NamedTuple
+from typing import NamedTuple, Protocol
 
 from django.conf import settings
 
@@ -57,7 +60,17 @@ class Location(NamedTuple):
     source: str
 
 
-def normalize(value):
+class Geocoder(Protocol):
+    """What :class:`CachingGeocoder` needs from anything in its chain."""
+
+    def lookup(self, query: str, country: str | None = None) -> Location | None: ...
+
+
+# name -> candidates, most populous first
+PlaceIndex = dict[str, list[tuple[int, Location]]]
+
+
+def normalize(value: str) -> str:
     """Fold a place name to a comparable key.
 
     Strips diacritics so 'Zürich' and 'Zurich' collide, drops punctuation and
@@ -80,12 +93,13 @@ class OfflineGeocoder:
     for the default extract, which is a few MB.
     """
 
-    def __init__(self, path=None):
-        self.path = Path(path or getattr(settings, "AGRICATCH_GEODATA", DEFAULT_DATASET))
-        self._index = None
+    def __init__(self, path: str | Path | None = None) -> None:
+        configured = getattr(settings, "AGRICATCH_GEODATA", None)
+        self.path = Path(path or configured or DEFAULT_DATASET)
+        self._index: PlaceIndex | None = None
         self._lock = threading.Lock()
 
-    def load(self):
+    def load(self) -> PlaceIndex:
         if self._index is not None:
             return self._index
 
@@ -95,7 +109,7 @@ class OfflineGeocoder:
             if not self.path.exists():
                 raise DatasetMissing(f"no geodata at {self.path} - run: manage.py fetch_geodata")
 
-            index = {}
+            index: PlaceIndex = {}
             with gzip.open(self.path, "rt", encoding="utf-8", newline="") as handle:
                 for row in csv.DictReader(handle, fieldnames=FIELDNAMES, delimiter="\t"):
                     index.setdefault(row["key"], []).append(
@@ -118,7 +132,7 @@ class OfflineGeocoder:
             logger.info("loaded %d place keys from %s", len(index), self.path)
             return self._index
 
-    def lookup(self, query, country=None):
+    def lookup(self, query: str, country: str | None = None) -> Location | None:
         if not query or not query.strip():
             return None
 
@@ -131,7 +145,7 @@ class OfflineGeocoder:
         return None
 
     @staticmethod
-    def _candidate_keys(query):
+    def _candidate_keys(query: str) -> list[str]:
         """Whole string first, then the comma-separated parts.
 
         Lets 'Kreuzberg, Berlin, Germany' fall back to 'Berlin' rather than
@@ -154,7 +168,7 @@ class NominatimGeocoder:
     ENDPOINT = "https://nominatim.openstreetmap.org/search"
     MIN_INTERVAL = 1.0
 
-    def __init__(self, user_agent=None, timeout=20.0):
+    def __init__(self, user_agent: str | None = None, timeout: float = 20.0) -> None:
         from agricatch.fetch import USER_AGENT
 
         self.user_agent = user_agent or USER_AGENT
@@ -162,20 +176,20 @@ class NominatimGeocoder:
         self._last_call = 0.0
         self._lock = threading.Lock()
 
-    def _throttle(self):
+    def _throttle(self) -> None:
         with self._lock:
             wait = self.MIN_INTERVAL - (time.monotonic() - self._last_call)
             if wait > 0:
                 time.sleep(wait)
             self._last_call = time.monotonic()
 
-    def lookup(self, query, country=None):
+    def lookup(self, query: str, country: str | None = None) -> Location | None:
         if not query or not query.strip():
             return None
 
         import httpx
 
-        params = {"q": query, "format": "json", "limit": 1}
+        params: dict[str, str | int] = {"q": query, "format": "json", "limit": 1}
         if country:
             params["countrycodes"] = country.lower()
 
@@ -214,16 +228,18 @@ class CachingGeocoder:
     ever, and misses are cached too so the hopeless ones are only asked once.
     """
 
-    def __init__(self, providers=None):
-        self._providers = list(providers) if providers is not None else None
+    def __init__(self, providers: Sequence[Geocoder] | None = None) -> None:
+        self._providers: list[Geocoder] | None = list(providers) if providers is not None else None
 
     @property
-    def providers(self):
+    def providers(self) -> list[Geocoder]:
         if self._providers is None:
             self._providers = [NominatimGeocoder(), OfflineGeocoder()]
         return self._providers
 
-    def lookup(self, query, country=None, refresh=False):
+    def lookup(
+        self, query: str, country: str | None = None, refresh: bool = False
+    ) -> Location | None:
         key = normalize(query or "")
         if not key:
             return None
@@ -252,7 +268,7 @@ class CachingGeocoder:
         )
         return location
 
-    def _ask_providers(self, query, country):
+    def _ask_providers(self, query: str, country: str | None) -> Location | None:
         for provider in self.providers:
             try:
                 found = provider.lookup(query, country=country)
@@ -267,7 +283,11 @@ class CachingGeocoder:
 _default = CachingGeocoder()
 
 
-def geocode(query, country=None, geocoder=None):
+def geocode(
+    query: str,
+    country: str | None = None,
+    geocoder: Geocoder | None = None,
+) -> Location | None:
     """Resolve ``query`` to a :class:`Location`, or None.
 
     Goes through the caching chain unless given another geocoder. Returns None

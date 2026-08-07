@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from django.contrib import admin
 
 from tech.models import Article, Author, Website
@@ -15,8 +17,8 @@ class AuthorAdmin(admin.ModelAdmin):
     search_fields = ("name",)
 
     @admin.display(description="articles")
-    def article_count(self, obj):
-        return obj.articles.count()
+    def article_count(self, obj: Author) -> int:
+        return int(obj.articles.count())
 
 
 @admin.register(Article)

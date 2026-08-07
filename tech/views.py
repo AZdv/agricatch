@@ -1,9 +1,11 @@
+from __future__ import annotations
+
 import datetime
 
 from django.contrib.admin.views.decorators import staff_member_required
 from django.core.cache import cache
 from django.db.models import Max
-from django.http import HttpResponseBadRequest, JsonResponse
+from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
@@ -21,26 +23,32 @@ LAST_UPDATE_CACHE_KEY = "tech:articles:last_update"
 LAST_UPDATE_CACHE_SECONDS = 2 * 60 * 60
 
 
-def _int_param(request, name, default):
+class BadParameter(ValueError):
+    """A query-string value that could not be read as asked for."""
+
+
+def _int_param(request: HttpRequest, name: str, default: int | None) -> int | None:
     raw = request.GET.get(name)
     if raw is None:
-        return default, None
+        return default
     try:
-        return int(raw), None
-    except ValueError:
-        return None, HttpResponseBadRequest(f"{name} must be an integer")
+        return int(raw)
+    except ValueError as exc:
+        raise BadParameter(f"{name} must be an integer") from exc
 
 
 @require_http_methods(["GET"])
-def articles(request):
+def articles(request: HttpRequest) -> HttpResponse:
     if "last_update" in request.GET:
         return JsonResponse({"last_update": _last_update()})
 
-    limit, error = _int_param(request, "limit", DEFAULT_LIMIT)
-    if error:
-        return error
-    limit = max(1, min(limit, MAX_LIMIT))
+    try:
+        requested_limit = _int_param(request, "limit", DEFAULT_LIMIT)
+        days_future = _int_param(request, "days_future", None)
+    except BadParameter as exc:
+        return HttpResponseBadRequest(str(exc))
 
+    limit = max(1, min(requested_limit or DEFAULT_LIMIT, MAX_LIMIT))
     queryset = Article.objects.select_related("website", "author")
 
     sort_by = request.GET.get("sort_by")
@@ -51,9 +59,6 @@ def articles(request):
             )
         queryset = queryset.order_by(sort_by)
 
-    days_future, error = _int_param(request, "days_future", None)
-    if error:
-        return error
     if days_future is not None:
         # Measured from the start of today, so this morning's articles still count.
         start = timezone.localtime().replace(hour=0, minute=0, second=0, microsecond=0)
@@ -78,7 +83,7 @@ def articles(request):
     return JsonResponse({"count": len(payload), "results": payload})
 
 
-def _last_update():
+def _last_update() -> str | None:
     cached = cache.get(LAST_UPDATE_CACHE_KEY)
     if cached is not None:
         return cached
@@ -90,7 +95,7 @@ def _last_update():
 
 
 @require_http_methods(["GET"])
-def article(request, pk):
+def article(request: HttpRequest, pk: int) -> HttpResponse:
     return render(
         request,
         "tech/article.html",
@@ -100,7 +105,7 @@ def article(request, pk):
 
 @staff_member_required
 @require_http_methods(["GET", "POST"])
-def importform(request):
+def importform(request: HttpRequest) -> HttpResponse:
     """Run an importer on demand. Staff only: it makes outbound requests and writes rows."""
     result = None
     form = ImportForm(request.POST or None)

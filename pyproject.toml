@@ -18,6 +18,11 @@ dev = [
     "pytest>=8.2",
     "pytest-django>=4.8",
     "ruff>=0.5",
+    "mypy>=1.11",
+    "django-stubs[compatible-mypy]>=5.0",
+    "lxml-stubs>=0.5",
+    "types-python-dateutil>=2.9",
+    "coverage>=7.5",
 ]
 
 [build-system]
@@ -32,6 +37,32 @@ DJANGO_SETTINGS_MODULE = "agricatch.settings"
 testpaths = ["tests"]
 markers = ["live: hits real networks; deselected by default"]
 addopts = "-m 'not live'"
+
+[tool.mypy]
+python_version = "3.11"
+plugins = ["mypy_django_plugin.main"]
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+exclude = ["migrations/", "build/"]
+
+[[tool.mypy.overrides]]
+module = "*.migrations.*"
+ignore_errors = true
+
+[tool.django-stubs]
+django_settings_module = "agricatch.settings"
+
+[tool.coverage.run]
+source = ["agricatch", "tech"]
+omit = ["*/migrations/*", "*/wsgi.py", "*/asgi.py"]
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true
 
 [tool.ruff]
 line-length = 100

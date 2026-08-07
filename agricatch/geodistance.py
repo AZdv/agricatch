@@ -10,9 +10,12 @@ what survives. Skipping the box makes the database compute a cosine for every
 row in the table.
 """
 
-from math import asin, cos, degrees, radians, sin, sqrt
+from __future__ import annotations
 
-from django.db.models import ExpressionWrapper, F, FloatField, Value
+from math import asin, cos, degrees, radians, sin, sqrt
+from typing import Any, TypeVar
+
+from django.db.models import ExpressionWrapper, F, FloatField, QuerySet, Value
 from django.db.models.functions import ACos, Cos, Greatest, Least, Radians, Sin
 
 EARTH_RADIUS_KM = 6371.0088
@@ -20,8 +23,10 @@ EARTH_RADIUS_KM = 6371.0088
 # Guards the bounding box against float rounding at its own edge; see bounding_box.
 EDGE_PADDING_DEGREES = 1e-9
 
+_QS = TypeVar("_QS", bound=QuerySet[Any])
 
-def haversine(lat1, lon1, lat2, lon2):
+
+def haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Great-circle distance in kilometres between two points already in hand."""
     dlat = radians(lat2 - lat1)
     dlon = radians(lon2 - lon1)
@@ -29,7 +34,9 @@ def haversine(lat1, lon1, lat2, lon2):
     return 2 * EARTH_RADIUS_KM * asin(sqrt(a))
 
 
-def bounding_box(latitude, longitude, radius_km):
+def bounding_box(
+    latitude: float, longitude: float, radius_km: float
+) -> tuple[float, float, float, float]:
     """The lat/lon window that is guaranteed to contain everything within the radius.
 
     Returns ``(min_lat, max_lat, min_lon, max_lon)``. The longitude span widens
@@ -57,7 +64,12 @@ def bounding_box(latitude, longitude, radius_km):
     )
 
 
-def distance_expression(latitude, longitude, lat_field="latitude", lon_field="longitude"):
+def distance_expression(
+    latitude: float,
+    longitude: float,
+    lat_field: str = "latitude",
+    lon_field: str = "longitude",
+) -> ExpressionWrapper:
     """ORM expression giving the distance in kilometres from a fixed point.
 
     Spherical law of cosines rather than haversine - one fewer function for the
@@ -73,23 +85,29 @@ def distance_expression(latitude, longitude, lat_field="latitude", lon_field="lo
 
 
 def annotate_distance(
-    queryset, latitude, longitude, lat_field="latitude", lon_field="longitude", alias="distance"
-):
+    queryset: _QS,
+    latitude: float,
+    longitude: float,
+    lat_field: str = "latitude",
+    lon_field: str = "longitude",
+    alias: str = "distance",
+) -> _QS:
     """Add a distance-in-km annotation, without filtering anything out."""
-    return queryset.annotate(
+    annotated: _QS = queryset.annotate(
         **{alias: distance_expression(latitude, longitude, lat_field, lon_field)}
     )
+    return annotated
 
 
 def filter_within(
-    queryset,
-    latitude,
-    longitude,
-    radius_km,
-    lat_field="latitude",
-    lon_field="longitude",
-    alias="distance",
-):
+    queryset: _QS,
+    latitude: float,
+    longitude: float,
+    radius_km: float,
+    lat_field: str = "latitude",
+    lon_field: str = "longitude",
+    alias: str = "distance",
+) -> _QS:
     """Rows within ``radius_km``, annotated with the distance and nearest first."""
     min_lat, max_lat, min_lon, max_lon = bounding_box(latitude, longitude, radius_km)
 
@@ -107,4 +125,5 @@ def filter_within(
         narrowed = narrowed.filter(**{f"{lon_field}__gte": min_lon, f"{lon_field}__lte": max_lon})
 
     annotated = annotate_distance(narrowed, latitude, longitude, lat_field, lon_field, alias)
-    return annotated.filter(**{f"{alias}__lte": radius_km}).order_by(alias)
+    result: _QS = annotated.filter(**{f"{alias}__lte": radius_km}).order_by(alias)
+    return result

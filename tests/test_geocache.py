@@ -13,19 +13,19 @@ BERLIN = Location(name="Berlin", latitude=52.5244, longitude=13.4105, country="D
 class FakeProvider:
     """Counts calls, so the tests can prove the cache is doing its job."""
 
-    def __init__(self, result=None, raises=None):
+    def __init__(self, result: Location | None = None, raises: Exception | None = None) -> None:
         self.result = result
         self.raises = raises
         self.calls = 0
 
-    def lookup(self, query, country=None):
+    def lookup(self, query: str, country: str | None = None) -> Location | None:
         self.calls += 1
         if self.raises:
             raise self.raises
         return self.result
 
 
-def test_a_miss_asks_the_provider_and_stores_the_answer():
+def test_a_miss_asks_the_provider_and_stores_the_answer() -> None:
     provider = FakeProvider(BERLIN)
     found = CachingGeocoder([provider]).lookup("Berlin")
 
@@ -36,7 +36,7 @@ def test_a_miss_asks_the_provider_and_stores_the_answer():
     assert row.latitude == pytest.approx(52.5244)
 
 
-def test_a_hit_does_not_ask_the_provider_again():
+def test_a_hit_does_not_ask_the_provider_again() -> None:
     provider = FakeProvider(BERLIN)
     geocoder = CachingGeocoder([provider])
 
@@ -48,7 +48,7 @@ def test_a_hit_does_not_ask_the_provider_again():
     assert GeocodeCache.objects.count() == 1
 
 
-def test_the_cache_key_is_normalised():
+def test_the_cache_key_is_normalised() -> None:
     provider = FakeProvider(BERLIN)
     geocoder = CachingGeocoder([provider])
 
@@ -58,7 +58,7 @@ def test_the_cache_key_is_normalised():
     assert provider.calls == 1
 
 
-def test_a_miss_is_remembered_too():
+def test_a_miss_is_remembered_too() -> None:
     """Otherwise every run re-asks about places that will never resolve."""
     provider = FakeProvider(None)
     geocoder = CachingGeocoder([provider])
@@ -70,7 +70,7 @@ def test_a_miss_is_remembered_too():
     assert GeocodeCache.objects.get().found is False
 
 
-def test_refresh_bypasses_the_cache():
+def test_refresh_bypasses_the_cache() -> None:
     provider = FakeProvider(BERLIN)
     geocoder = CachingGeocoder([provider])
 
@@ -81,7 +81,7 @@ def test_refresh_bypasses_the_cache():
     assert GeocodeCache.objects.count() == 1
 
 
-def test_a_different_country_filter_is_a_different_entry():
+def test_a_different_country_filter_is_a_different_entry() -> None:
     provider = FakeProvider(BERLIN)
     geocoder = CachingGeocoder([provider])
 
@@ -93,60 +93,63 @@ def test_a_different_country_filter_is_a_different_entry():
     assert set(GeocodeCache.objects.values_list("country_filter", flat=True)) == {"", "US"}
 
 
-def test_the_resolved_country_is_kept_apart_from_the_requested_one():
+def test_the_resolved_country_is_kept_apart_from_the_requested_one() -> None:
     geocoder = CachingGeocoder([FakeProvider(BERLIN)])
     geocoder.lookup("Berlin", country="DE")
 
     row = GeocodeCache.objects.get()
     assert row.country_filter == "DE"
     assert row.country == "DE"
-    assert geocoder.lookup("Berlin", country="DE").country == "DE"
+    again = geocoder.lookup("Berlin", country="DE")
+    assert again is not None
+    assert again.country == "DE"
 
 
-def test_the_chain_falls_through_to_the_next_provider():
+def test_the_chain_falls_through_to_the_next_provider() -> None:
     first, second = FakeProvider(None), FakeProvider(BERLIN)
     assert CachingGeocoder([first, second]).lookup("Berlin") == BERLIN
     assert (first.calls, second.calls) == (1, 1)
 
 
-def test_the_chain_stops_at_the_first_hit():
+def test_the_chain_stops_at_the_first_hit() -> None:
     first, second = FakeProvider(BERLIN), FakeProvider(None)
     CachingGeocoder([first, second]).lookup("Berlin")
     assert (first.calls, second.calls) == (1, 0)
 
 
-def test_an_unbuilt_dataset_is_skipped_rather_than_fatal():
+def test_an_unbuilt_dataset_is_skipped_rather_than_fatal() -> None:
     missing = FakeProvider(raises=DatasetMissing("no data"))
     fallback = FakeProvider(BERLIN)
     assert CachingGeocoder([missing, fallback]).lookup("Berlin") == BERLIN
 
 
-def test_everything_failing_yields_a_cached_miss():
+def test_everything_failing_yields_a_cached_miss() -> None:
     missing = FakeProvider(raises=DatasetMissing("no data"))
     assert CachingGeocoder([missing]).lookup("Berlin") is None
     assert GeocodeCache.objects.get().found is False
 
 
 @pytest.mark.parametrize("query", ["", "   ", None])
-def test_blank_queries_never_reach_a_provider(query):
+def test_blank_queries_never_reach_a_provider(query: str) -> None:
     provider = FakeProvider(BERLIN)
     assert CachingGeocoder([provider]).lookup(query) is None
     assert provider.calls == 0
     assert not GeocodeCache.objects.exists()
 
 
-def test_the_default_chain_is_nominatim_then_offline():
+def test_the_default_chain_is_nominatim_then_offline() -> None:
     from agricatch.geocode import NominatimGeocoder
 
     providers = CachingGeocoder().providers
     assert [type(p) for p in providers] == [NominatimGeocoder, OfflineGeocoder]
 
 
-def test_round_tripping_through_the_cache_preserves_the_location():
+def test_round_tripping_through_the_cache_preserves_the_location() -> None:
     geocoder = CachingGeocoder([FakeProvider(BERLIN)])
     geocoder.lookup("Berlin")
 
     restored = GeocodeCache.objects.get().as_location()
+    assert restored is not None
     assert restored.name == BERLIN.name
     assert restored.latitude == pytest.approx(BERLIN.latitude)
     assert restored.longitude == pytest.approx(BERLIN.longitude)

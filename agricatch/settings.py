@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import os
+from collections.abc import Sequence
 from pathlib import Path
 
 from django.core.exceptions import ImproperlyConfigured
@@ -6,14 +9,14 @@ from django.core.exceptions import ImproperlyConfigured
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
-def _flag(name, default=False):
+def _flag(name: str, default: bool = False) -> bool:
     raw = os.environ.get(name)
     if raw is None:
         return default
     return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
-def _csv(name, default=()):
+def _csv(name: str, default: Sequence[str] = ()) -> list[str]:
     raw = os.environ.get(name, "")
     values = [item.strip() for item in raw.split(",") if item.strip()]
     return values or list(default)

@@ -1,3 +1,8 @@
+from __future__ import annotations
+
+from argparse import ArgumentParser
+from typing import Any
+
 from django.core.management.base import BaseCommand, CommandError
 
 from agricatch.helpers.general import get_all_importers, load_importer
@@ -6,11 +11,11 @@ from agricatch.helpers.general import get_all_importers, load_importer
 class Command(BaseCommand):
     help = "Import articles from one or more websites. With no name, runs every importer."
 
-    def add_arguments(self, parser):
+    def add_arguments(self, parser: ArgumentParser) -> None:
         parser.add_argument("importers", nargs="*", help="importer names, e.g. techcrunch")
         parser.add_argument("-d", "--days", type=int, default=1, help="days back to crawl")
 
-    def handle(self, *args, **options):
+    def handle(self, *args: Any, **options: Any) -> None:
         names = options["importers"] or get_all_importers()
         if not names:
             raise CommandError("no importers found")
