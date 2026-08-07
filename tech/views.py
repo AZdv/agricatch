@@ -41,7 +41,7 @@ def articles(request):
         return error
     limit = max(1, min(limit, MAX_LIMIT))
 
-    queryset = Article.objects.select_related("website")
+    queryset = Article.objects.select_related("website", "author")
 
     sort_by = request.GET.get("sort_by")
     if sort_by is not None:
@@ -68,7 +68,7 @@ def articles(request):
             "description": article.description,
             "link": article.link,
             "image": article.image,
-            "author": article.author,
+            "author": article.author.name if article.author else None,
             "time": article.time.isoformat() if article.time else None,
             "added_at": article.added_at.isoformat(),
             "website": article.website.slug if article.website else None,
@@ -94,7 +94,7 @@ def article(request, pk):
     return render(
         request,
         "tech/article.html",
-        {"article": get_object_or_404(Article.objects.select_related("website"), pk=pk)},
+        {"article": get_object_or_404(Article.objects.select_related("website", "author"), pk=pk)},
     )
 
 

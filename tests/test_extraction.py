@@ -52,7 +52,10 @@ def test_core_fields_are_populated(importer_class, fixture, fixture_bytes):
 
 def test_rss_author_comes_from_the_dc_namespace(fixture_bytes):
     _, records = records_from(Techcrunch(), fixture_bytes("techcrunch.xml"))
-    assert any(r.get("author") for r in records)
+    authors = [r["author"] for r in records if r.get("author")]
+    assert authors
+    assert all(a.model == "Author" for a in authors)
+    assert all(a.values["name"].strip() for a in authors)
 
 
 def test_kidsil_urls_are_absolute(fixture_bytes):

@@ -18,12 +18,29 @@ class Website(models.Model):
         return self.name or self.slug
 
 
+class Author(models.Model):
+    name = models.CharField(max_length=128, unique=True)
+
+    class Meta:
+        db_table = "author"
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
 class Article(models.Model):
     name = models.TextField()
     description = models.TextField(blank=True, default="")
     link = models.URLField(max_length=512, blank=True, default="")
     image = models.URLField(max_length=512, blank=True, default="")
-    author = models.CharField(max_length=128, blank=True, default="")
+    author = models.ForeignKey(
+        Author,
+        on_delete=models.SET_NULL,
+        related_name="articles",
+        null=True,
+        blank=True,
+    )
     time = models.DateTimeField(null=True, blank=True)
     added_at = models.DateTimeField(auto_now_add=True)
     content_hash = models.CharField(max_length=64, unique=True, editable=False)

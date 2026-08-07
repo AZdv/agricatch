@@ -41,6 +41,20 @@ DATE_PLACEHOLDERS = ("%d", "%m", "%Y")
 
 
 @dataclass
+class RelatedRecord:
+    """A nested record destined for a related table.
+
+    Extraction produces these; :meth:`Website.persist` turns them into model
+    instances. Keeping them inert until then means an importer can be tested
+    against a fixture without a database.
+    """
+
+    model: str
+    lookup: tuple
+    values: dict
+
+
+@dataclass
 class ImportResult:
     created: int = 0
     updated: int = 0
@@ -132,7 +146,7 @@ class Website:
                     model.__name__,
                     ", ".join(sorted(unknown)),
                 )
-            payload = {k: v for k, v in record.items() if k in writable}
+            payload = {k: self.resolve_related(v) for k, v in record.items() if k in writable}
             payload["website"] = website
 
             _, created = model.objects.update_or_create(
@@ -146,6 +160,24 @@ class Website:
 
     def get_model(self):
         return apps.get_model(settings.AGRICATCH_APP, self.model_name)
+
+    def resolve_related(self, value):
+        """Turn a :class:`RelatedRecord` into a saved instance, nested ones first.
+
+        Matching is get-or-create on the lookup fields, so re-running an import
+        reuses the existing row rather than duplicating it, and never overwrites
+        a related row that someone has since corrected by hand.
+        """
+        if not isinstance(value, RelatedRecord):
+            return value
+
+        model = apps.get_model(settings.AGRICATCH_APP, value.model)
+        resolved = {key: self.resolve_related(item) for key, item in value.values.items()}
+        lookup = {key: resolved[key] for key in value.lookup}
+        defaults = {key: item for key, item in resolved.items() if key not in lookup}
+
+        instance, _ = model.objects.get_or_create(**lookup, defaults=defaults)
+        return instance
 
     # ---- parsing -------------------------------------------------------
 
@@ -172,11 +204,32 @@ class Website:
     def extract_record(self, node, crawl_date=None):
         """Build one record dict, or None when a required field is missing."""
         crawl_date = crawl_date or datetime.date.today()
+        record = self._extract_fields(node, self.structure.get("fields", {}), crawl_date)
+        if record is None:
+            return None
+        return self.hydrate(record, node)
+
+    def _extract_fields(self, node, fields, crawl_date):
+        """Extract a set of field specs against ``node``.
+
+        Returns None if any required field is missing, which is how a record
+        (or a nested related record) gets dropped.
+        """
         record = {}
-        for name, spec in self.structure.get("fields", {}).items():
-            raw = self._extract_field(node, spec)
+        for name, spec in fields.items():
             required = spec.get("required", self.required_by_default)
 
+            if spec.get("type") == "table":
+                value = self._extract_table(node, spec, crawl_date)
+                if value is None:
+                    if required:
+                        logger.debug("%s: dropping record, %r missing", self.slug, name)
+                        return None
+                    continue
+                record[name] = value
+                continue
+
+            raw = self._extract_field(node, spec)
             if raw in (None, ""):
                 if required:
                     logger.debug("%s: dropping record, %r missing", self.slug, name)
@@ -194,7 +247,40 @@ class Website:
 
             record[name] = value
 
-        return self.hydrate(record, node)
+        return record
+
+    def _extract_table(self, node, spec, crawl_date):
+        """Extract a nested record for a related model.
+
+        ``child_xpath`` narrows the scope first, for when the related fields sit
+        under their own element; without it the nested fields are read straight
+        off ``node``.
+        """
+        try:
+            model = spec["model"]
+            fields = spec["fields"]
+        except KeyError as exc:
+            raise ValueError(f"{self.slug}: table field needs 'model' and 'fields'") from exc
+
+        scope = node
+        if spec.get("child_xpath"):
+            found = self.xpath(node, spec["child_xpath"])
+            if not found:
+                return None
+            scope = found[0]
+
+        values = self._extract_fields(scope, fields, crawl_date)
+        if not values:
+            return None
+
+        # Without an explicit lookup, every extracted field takes part in the match.
+        lookup = tuple(spec.get("lookup") or fields.keys())
+        missing = [key for key in lookup if key not in values]
+        if missing:
+            logger.debug("%s: related %s missing lookup field(s) %s", self.slug, model, missing)
+            return None
+
+        return RelatedRecord(model=model, lookup=lookup, values=values)
 
     def hydrate(self, record, node):
         """Hook for subclasses to adjust a record before it is persisted."""

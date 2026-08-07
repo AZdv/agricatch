@@ -12,7 +12,13 @@ class Techcrunch(Website):
             "name": {"xpath": "title/text()"},
             "description": {"xpath": "description/text()", "required": False},
             "link": {"xpath": "link/text()"},
-            "author": {"xpath": "dc:creator/text()", "required": False},
+            "author": {
+                "type": "table",
+                "model": "Author",
+                "lookup": ["name"],
+                "required": False,
+                "fields": {"name": {"xpath": "dc:creator/text()"}},
+            },
             "time": {"type": "time", "xpath": "pubDate/text()"},
         },
     }

@@ -15,7 +15,15 @@ class Cnet(Website):
             "name": {"xpath": "atom:title/text()"},
             "description": {"xpath": "atom:summary/text()", "required": False},
             "link": {"xpath": 'atom:link[@rel="alternate"]/@href'},
-            "author": {"xpath": "atom:author/atom:name/text()", "required": False},
+            # Atom nests the byline, so scope into it and read the fields there.
+            "author": {
+                "type": "table",
+                "model": "Author",
+                "child_xpath": "atom:author",
+                "lookup": ["name"],
+                "required": False,
+                "fields": {"name": {"xpath": "atom:name/text()"}},
+            },
             "image": {"xpath": "media:content/@url", "required": False},
             # published can be years old on evergreen articles; updated is when
             # the entry actually surfaced in the feed.
