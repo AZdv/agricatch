@@ -331,7 +331,13 @@ class Website:
             return html.fromstring(content)
         # Feeds are XML. Parsing them as HTML drops <link> text (a void element
         # in HTML) and flattens namespaces, so it has to be the XML parser here.
-        return etree.fromstring(content, parser=etree.XMLParser(recover=True))
+        #
+        # Entity resolution is turned off explicitly. Feeds are somebody else's
+        # bytes, and an entity like <!ENTITY x SYSTEM "file:///etc/passwd">
+        # would otherwise be expanded into a field. lxml 6 happens to default
+        # this off, but the floor in pyproject is 5.2, where it does not.
+        parser = etree.XMLParser(recover=True, resolve_entities=False, no_network=True)
+        return etree.fromstring(content, parser=parser)
 
     def xpath(self, node: Node, expression: str) -> Any:
         if self.namespaces:
