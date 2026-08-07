@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 from urllib.parse import urljoin
 
-from agricatch.website import Website
+from agricatch.website import Node, Record, Website
 
 BASE_URL = "https://www.kidsil.net/"
 
@@ -37,7 +39,7 @@ class Kidsil(Website):
         },
     }
 
-    def hydrate(self, record, node):
+    def hydrate(self, record: Record, node: Node) -> Record:
         # Images are served protocol-relative (//media.kidsil.net/...).
         if record.get("image"):
             record["image"] = urljoin(BASE_URL, record["image"])
