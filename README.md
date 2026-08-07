@@ -1,4 +1,4 @@
-![AgriCatch Logo](https://azdv.github.io/agricatch/images/logo.png)
+![AgriCatch Logo](docs/logo.png)
 =========
 
 [![CI](https://github.com/AZdv/agricatch/actions/workflows/ci.yml/badge.svg)](https://github.com/AZdv/agricatch/actions/workflows/ci.yml)
