@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import ipaddress
 import logging
+import socket
 import threading
 import time
 from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor
+from typing import Any, Protocol
+from urllib.parse import urlparse
 
 import httpx
 
@@ -16,6 +20,9 @@ DEFAULT_TIMEOUT = 20.0
 DEFAULT_DELAY = 0.5
 DEFAULT_MAX_PAGES = 100
 DEFAULT_CONCURRENCY = 4
+DEFAULT_MAX_BYTES = 25 * 1024 * 1024
+MAX_REDIRECTS = 5
+ALLOWED_SCHEMES = ("http", "https")
 USER_AGENT = "agricatch/2.0 (+https://github.com/AZdv/agricatch)"
 
 
@@ -23,33 +30,110 @@ class FetchError(RuntimeError):
     """Raised when a URL cannot be retrieved."""
 
 
+class BlockedURL(FetchError):
+    """Raised when a URL points somewhere a crawler has no business going."""
+
+
 class CrawlLimitReached(RuntimeError):
     """Raised when a crawl has used up its page budget."""
+
+
+class HTTPClient(Protocol):
+    """The part of ``httpx.Client`` this module uses, so it can be substituted."""
+
+    def get(self, url: str, **kwargs: Any) -> httpx.Response: ...
+
+    def close(self) -> None: ...
+
+
+def check_public_url(url: str) -> None:
+    """Refuse anything that is not a public http(s) address.
+
+    A crawler follows links it was handed by somebody else, so "fetch this URL"
+    is only ever a request from an untrusted party. Without this, a page could
+    point at ``169.254.169.254`` and have the crawler read cloud instance
+    credentials, or at ``127.0.0.1`` to reach services that trust the loopback.
+    """
+    parsed = urlparse(url)
+    if parsed.scheme not in ALLOWED_SCHEMES:
+        raise BlockedURL(f"refusing {parsed.scheme or 'scheme-less'} URL: {url}")
+
+    host = parsed.hostname
+    if not host:
+        raise BlockedURL(f"no host in {url}")
+
+    try:
+        infos = socket.getaddrinfo(host, parsed.port or 0, proto=socket.IPPROTO_TCP)
+    except OSError as exc:
+        raise FetchError(f"could not resolve {host}: {exc}") from exc
+
+    for info in infos:
+        address = ipaddress.ip_address(info[4][0])
+        if (
+            address.is_private
+            or address.is_loopback
+            or address.is_link_local
+            or address.is_reserved
+            or address.is_multicast
+            or address.is_unspecified
+        ):
+            raise BlockedURL(f"refusing non-public address {address} for {url}")
 
 
 def fetch_bytes(
     url: str,
     *,
     timeout: float = DEFAULT_TIMEOUT,
-    client: httpx.Client | None = None,
+    client: HTTPClient | None = None,
+    max_bytes: int = DEFAULT_MAX_BYTES,
 ) -> bytes:
     """Return the raw body at ``url``.
 
     Bytes rather than text: lxml needs the undecoded body to honour the encoding
     declared in an XML prolog.
+
+    Redirects are followed by hand rather than by httpx, so every hop gets the
+    same public-address check as the original URL. Letting the client follow
+    them means a permitted URL can bounce straight to a blocked one.
     """
     headers = {"User-Agent": USER_AGENT}
-    try:
-        if client is not None:
-            response = client.get(url, headers=headers, follow_redirects=True, timeout=timeout)
-        else:
-            response = httpx.get(url, headers=headers, follow_redirects=True, timeout=timeout)
-        response.raise_for_status()
-    except httpx.HTTPError as exc:
-        raise FetchError(f"could not fetch {url}: {exc}") from exc
+    owned = client is None
+    session = client or httpx.Client(follow_redirects=False, timeout=timeout)
 
-    logger.debug("fetched %s (%d bytes)", url, len(response.content))
-    return response.content
+    try:
+        target = url
+        for _ in range(MAX_REDIRECTS + 1):
+            check_public_url(target)
+            try:
+                response = session.get(
+                    target, headers=headers, follow_redirects=False, timeout=timeout
+                )
+            except httpx.HTTPError as exc:
+                raise FetchError(f"could not fetch {target}: {exc}") from exc
+
+            if response.is_redirect:
+                location = response.headers.get("location")
+                if not location:
+                    raise FetchError(f"redirect without a location at {target}")
+                target = str(response.next_request.url) if response.next_request else location
+                continue
+
+            try:
+                response.raise_for_status()
+            except httpx.HTTPError as exc:
+                raise FetchError(f"could not fetch {target}: {exc}") from exc
+
+            content = response.content
+            if len(content) > max_bytes:
+                raise FetchError(f"{target} returned more than {max_bytes} bytes")
+
+            logger.debug("fetched %s (%d bytes)", target, len(content))
+            return content
+
+        raise FetchError(f"too many redirects starting at {url}")
+    finally:
+        if owned:
+            session.close()
 
 
 class FetchSession:
@@ -85,6 +169,7 @@ class FetchSession:
         self._cache: dict[str, bytes] = {}
         self._last_start = 0.0
         self._lock = threading.Lock()
+        self._url_locks: dict[str, threading.Lock] = {}
 
     def get(self, url: str) -> bytes:
         cached = self._cache.get(url)
@@ -92,11 +177,23 @@ class FetchSession:
             logger.debug("already had %s", url)
             return cached
 
-        self._reserve(url)
-        content = fetch_bytes(url, timeout=self.timeout)
+        # One lock per URL, so two workers wanting the same page do not both
+        # fetch it and charge the budget twice; the second waits and finds it
+        # cached.
+        with self._lock_for(url):
+            cached = self._cache.get(url)
+            if cached is not None:
+                return cached
+
+            self._reserve(url)
+            content = fetch_bytes(url, timeout=self.timeout)
+            with self._lock:
+                self._cache[url] = content
+            return content
+
+    def _lock_for(self, url: str) -> threading.Lock:
         with self._lock:
-            self._cache[url] = content
-        return content
+            return self._url_locks.setdefault(url, threading.Lock())
 
     def prefetch(self, urls: Iterable[str]) -> None:
         """Warm the cache for several URLs at once.
