@@ -65,8 +65,8 @@ python manage.py runserver
 
 ## Writing an importer
 
-Drop a module in `tech/websites/`. The class name is the module name in title case —
-`cnet.py` holds `Cnet` — and discovery picks it up automatically, including in the
+Drop a module in `tech/websites/`. The class name is the module name in title case
+(`cnet.py` holds `Cnet`), and discovery picks it up automatically, including in the
 import form's dropdown.
 
 Field options:
@@ -105,8 +105,8 @@ author on every feed importer works this way:
 
 Matching is get-or-create on `lookup`, so re-importing reuses the existing row
 instead of duplicating it, and never overwrites a row you have since corrected by
-hand. Add `child_xpath` when the related fields sit under their own element —
-CNET's Atom byline is nested that way.
+hand. Add `child_xpath` when the related fields sit under their own element, as
+CNET's Atom byline does.
 
 Extraction produces an inert `RelatedRecord`; nothing is written until
 `persist()`. That is what lets an importer be tested against a fixture with no
@@ -123,9 +123,9 @@ title and a teaser, and the real content is a click away.
 ```python
 structure = {
     "child_xpath": '//ul[contains(@class,"post-list")]/li',
-    "object_url": "h2/a/@href",                      # each record's own page
-    "pagination": '//a[contains(@href,"/page/")]',   # links to further index pages
-    "fields": {...},                                 # read off the detail page
+    "object_url": "h2/a/@href",  # each record's own page
+    "pagination": '//a[contains(@href,"/page/")]',  # links to further index pages
+    "fields": {...},  # read off the detail page
 }
 ```
 
@@ -138,24 +138,24 @@ structure = {
 kidsil uses the first two: its listing carries a ~160 character excerpt while the
 posts run past 5,000, so following the link is worth an extra request.
 
-That extra request is the catch — one index page of ten records becomes eleven
+That extra request is the catch: one index page of ten records becomes eleven
 fetches, and a `pagination` chain has no natural end. Two class attributes bound it:
 
 ```python
 class Kidsil(Website):
-    crawl_delay = 0.5   # seconds between requests
-    max_pages = 12      # hard ceiling for one import
+    crawl_delay = 0.5  # seconds between requests
+    max_pages = 12  # hard ceiling for one import
 ```
 
 Hitting `max_pages` is not an error. The crawl stops, logs where it got to, and
 returns everything gathered so far. Pages already fetched are never fetched twice,
 and a pagination loop that points back at itself terminates rather than spinning.
 
-`collect()` takes a `session` argument — anything with `get(url) -> bytes` — which
+`collect()` takes a `session` argument (anything with `get(url) -> bytes`), which
 is how the crawling tests run against saved pages instead of the network.
 
 Feeds are parsed as XML on purpose. An HTML parse looks like it works and quietly
-loses `<link>`, which is a void element in HTML — there's a regression test pinning
+loses `<link>`, which is a void element in HTML. There's a regression test pinning
 this down.
 
 ### Custom XPath functions
@@ -171,7 +171,7 @@ Anything named `xpath_func_<name>` in that module is exposed as `<name>`.
 
 ## Geocoding
 
-Geocoding is a lookup, not a calculation — nothing derives coordinates from a name
+Geocoding is a lookup, not a calculation: nothing derives coordinates from a name
 without reference data. So the only real question is which dataset you carry.
 
 ```bash
@@ -195,8 +195,8 @@ cached too, or every run re-asks about the places that will never resolve. Pass
 `refresh=True` to re-ask anyway.
 
 That ordering matters because **precision decides which queries mean anything.**
-At city resolution every venue in Berlin collapses onto one point — measured mean
-error 7.9 km, max 14.9 km — so "near Hamburg vs Berlin" works and "within 5 km of
+At city resolution every venue in Berlin collapses onto one point (measured mean
+error 7.9 km, max 14.9 km), so "near Hamburg vs Berlin" works and "within 5 km of
 me" is meaningless. OpenStreetMap resolves the actual address; the offline set is
 the floor underneath it, for regions and for when the network is gone.
 
@@ -207,8 +207,8 @@ the floor underneath it, for regions and for when the network is gone.
 | `OfflineGeocoder` | city / region | the `geodata/` index |
 
 The offline index comes from a [GeoNames](https://download.geonames.org/export/dump/)
-extract (CC BY 4.0) and lives in gitignored `geodata/` — derived data, rebuilt in
-one command. Those lookups are pure standard library: no network, no key, no
+extract (CC BY 4.0) and lives in gitignored `geodata/`, being derived data rebuilt
+in one command. Those lookups are pure standard library: no network, no key, no
 package. Names fold across case and accents, ambiguous ones resolve to the most
 populous match unless you pass `country`, and a long string falls back to its
 comma-separated parts so `"Kreuzberg, Berlin"` still finds Berlin. `--alternates`
@@ -218,7 +218,7 @@ Seeding is the slow part: public Nominatim answers in roughly 20 seconds, so a f
 hundred venues is a couple of hours, once, in the background. After that it is a
 dictionary lookup.
 
-Nothing in `tech` calls this — articles have no location. It is here for
+Nothing in `tech` calls this, since articles have no location. It is here for
 location-bearing importers, which is where it came from. Use it from an importer's
 `hydrate()`, since one lookup fills two columns.
 
@@ -250,7 +250,7 @@ pytest -m live      # hits the real feeds
 
 The offline suite runs against real responses recorded from each source, so it checks
 actual feed shapes rather than something I made up. The `live` suite is what tells you
-a source has changed its layout — worth running when an importer starts returning
+a source has changed its layout. Worth running when an importer starts returning
 nothing.
 
 ## Notes

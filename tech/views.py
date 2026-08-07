@@ -101,7 +101,7 @@ def article(request, pk):
 @staff_member_required
 @require_http_methods(["GET", "POST"])
 def importform(request):
-    """Run an importer on demand. Staff only — it makes outbound requests and writes rows."""
+    """Run an importer on demand. Staff only: it makes outbound requests and writes rows."""
     result = None
     form = ImportForm(request.POST or None)
 
