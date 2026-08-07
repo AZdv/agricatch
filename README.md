@@ -117,6 +117,22 @@ database at all.
 Set `parser = "html"` for pages rather than feeds, and override `hydrate()` when a
 record needs fixing up before it is saved (kidsil uses it to absolutize image URLs).
 
+### What it refuses to do
+
+Everything a crawler fetches or parses is somebody else's bytes, so a few things
+are not negotiable:
+
+- **Only public http(s) addresses.** Every URL, including each redirect hop, is
+  resolved and checked before the request goes out. Loopback, private, link-local
+  and reserved ranges are refused, so a page cannot point the crawler at
+  `169.254.169.254` and have it read cloud instance credentials. Redirects are
+  followed by hand for exactly this reason; letting the client follow them means
+  an allowed URL can bounce to a blocked one unchecked.
+- **A size ceiling** on any single response, so a source serving an endless body
+  cannot exhaust memory.
+- **No XML entity resolution.** A feed containing
+  `<!ENTITY x SYSTEM "file:///etc/passwd">` gets an empty field, not the file.
+
 ### Crawling more than one page
 
 A feed hands you everything inline. A website usually does not: the listing has a
@@ -262,10 +278,14 @@ mypy agricatch tech tests    # everything is annotated, tests included
 coverage run -m pytest && coverage report
 ```
 
-The offline suite runs against real responses recorded from each source, so it checks
-actual feed shapes rather than something I made up. It opens no sockets, so it stays
-fast and deterministic. The `live` suite is what tells you a source has changed its
-layout. Worth running when an importer starts returning nothing.
+The offline suite opens no sockets, so it stays fast and deterministic. The feed
+fixtures are written to match the exact structure of the real feeds (the `<link>`
+element-text trap, the `dc:creator` namespace, Atom's nested author) without carrying
+anyone else's articles; the kidsil ones are real captures of my own site. See
+[`tests/fixtures/README.md`](tests/fixtures/README.md) for the provenance of each.
+
+The `live` suite is what tells you a source has changed its layout. Worth running when
+an importer starts returning nothing.
 
 CI runs the first four on every push across Python 3.11 to 3.13, and checks that the
 migrations match the models. The live suite runs weekly on its own schedule rather
