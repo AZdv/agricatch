@@ -105,3 +105,32 @@ def test_nominatim_resolves_a_street_level_place():
     assert location is not None
     assert location.source == "nominatim"
     assert location.latitude == pytest.approx(52.51, abs=0.05)
+
+
+@pytest.mark.live
+@pytest.mark.django_db
+def test_the_chain_resolves_a_venue_once_then_serves_it_from_cache():
+    from agricatch.geocode import CachingGeocoder
+    from agricatch.models import GeocodeCache
+
+    geocoder = CachingGeocoder()
+    first = geocoder.lookup("Berghain, Berlin")
+
+    assert first is not None
+    assert first.source == "nominatim"
+    assert first.latitude == pytest.approx(52.51, abs=0.05)
+    assert GeocodeCache.objects.count() == 1
+
+    # Second time round must not touch the network at all.
+    assert geocoder.lookup("Berghain, Berlin") == first
+    assert GeocodeCache.objects.count() == 1
+
+
+@pytest.mark.live
+@pytest.mark.django_db
+def test_the_offline_layer_catches_what_nominatim_is_not_asked_for():
+    """A plain city resolves even with the network provider removed."""
+    from agricatch.geocode import CachingGeocoder
+
+    geocoder = CachingGeocoder([OfflineGeocoder(SAMPLE)])
+    assert geocoder.lookup("Berlin").source == "geonames"

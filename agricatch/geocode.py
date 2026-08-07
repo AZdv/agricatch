@@ -205,15 +205,74 @@ class NominatimGeocoder:
         )
 
 
-_default = OfflineGeocoder()
+class CachingGeocoder:
+    """Resolves through a chain of providers and remembers every answer.
+
+    The default chain is Nominatim then the offline dataset: exact coordinates
+    when the network can give them, city-level as a floor when it cannot. Since
+    importing keeps meeting the same venues, a lookup costs one network call
+    ever, and misses are cached too so the hopeless ones are only asked once.
+    """
+
+    def __init__(self, providers=None):
+        self._providers = list(providers) if providers is not None else None
+
+    @property
+    def providers(self):
+        if self._providers is None:
+            self._providers = [NominatimGeocoder(), OfflineGeocoder()]
+        return self._providers
+
+    def lookup(self, query, country=None, refresh=False):
+        key = normalize(query or "")
+        if not key:
+            return None
+
+        from agricatch.models import GeocodeCache
+
+        country_filter = (country or "").upper()
+        if not refresh:
+            cached = GeocodeCache.objects.filter(key=key, country_filter=country_filter).first()
+            if cached is not None:
+                return cached.as_location()
+
+        location = self._ask_providers(query, country)
+        GeocodeCache.objects.update_or_create(
+            key=key,
+            country_filter=country_filter,
+            defaults={
+                "query": query[:255],
+                "found": location is not None,
+                "name": location.name[:255] if location else "",
+                "latitude": location.latitude if location else None,
+                "longitude": location.longitude if location else None,
+                "country": location.country[:2] if location else "",
+                "source": location.source if location else "",
+            },
+        )
+        return location
+
+    def _ask_providers(self, query, country):
+        for provider in self.providers:
+            try:
+                found = provider.lookup(query, country=country)
+            except DatasetMissing:
+                logger.warning("offline geodata missing; run manage.py fetch_geodata")
+                continue
+            if found is not None:
+                return found
+        return None
+
+
+_default = CachingGeocoder()
 
 
 def geocode(query, country=None, geocoder=None):
     """Resolve ``query`` to a :class:`Location`, or None.
 
-    Uses the offline dataset unless given another geocoder. Returns None rather
-    than raising - both for an unknown place and for a dataset that has not been
-    built yet - so a caller never has to guard it.
+    Goes through the caching chain unless given another geocoder. Returns None
+    rather than raising - for an unknown place, an unbuilt dataset or an
+    unreachable network alike - so a caller never has to guard it.
     """
     try:
         return (geocoder or _default).lookup(query, country=country)
