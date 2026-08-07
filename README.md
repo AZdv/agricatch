@@ -79,6 +79,7 @@ Field options:
 | `format` | `time` only. `%STR%` is the matched text, `%TIME%` the crawl date |
 | `remove` | `time` only. Substrings stripped before parsing |
 | `function` | Name of an `agricatch.helpers.text` callable to apply |
+| `url` | Xpath to a page this one field lives on. Fetched, then `xpath` runs there |
 
 ### Related tables
 
@@ -112,7 +113,46 @@ Extraction produces an inert `RelatedRecord`; nothing is written until
 database at all.
 
 Set `parser = "html"` for pages rather than feeds, and override `hydrate()` when a
-record needs fixing up before it is saved (kidsil uses it to absolutize URLs).
+record needs fixing up before it is saved (kidsil uses it to absolutize image URLs).
+
+### Crawling more than one page
+
+A feed hands you everything inline. A website usually does not: the listing has a
+title and a teaser, and the real content is a click away.
+
+```python
+structure = {
+    "child_xpath": '//ul[contains(@class,"post-list")]/li',
+    "object_url": "h2/a/@href",                      # each record's own page
+    "pagination": '//a[contains(@href,"/page/")]',   # links to further index pages
+    "fields": {...},                                 # read off the detail page
+}
+```
+
+| Key | Meaning |
+|---|---|
+| `object_url` | Xpath to each record's page. `fields` are then read from there |
+| `object_url_child_xpath` | Optional. Scope into the detail page before reading `fields` |
+| `pagination` | Xpath to further index pages. Followed until the budget runs out |
+
+kidsil uses the first two: its listing carries a ~160 character excerpt while the
+posts run past 5,000, so following the link is worth an extra request.
+
+That extra request is the catch — one index page of ten records becomes eleven
+fetches, and a `pagination` chain has no natural end. Two class attributes bound it:
+
+```python
+class Kidsil(Website):
+    crawl_delay = 0.5   # seconds between requests
+    max_pages = 12      # hard ceiling for one import
+```
+
+Hitting `max_pages` is not an error. The crawl stops, logs where it got to, and
+returns everything gathered so far. Pages already fetched are never fetched twice,
+and a pagination loop that points back at itself terminates rather than spinning.
+
+`collect()` takes a `session` argument — anything with `get(url) -> bytes` — which
+is how the crawling tests run against saved pages instead of the network.
 
 Feeds are parsed as XML on purpose. An HTML parse looks like it works and quietly
 loses `<link>`, which is a void element in HTML — there's a regression test pinning
