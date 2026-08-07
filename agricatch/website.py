@@ -29,7 +29,7 @@ from django.utils import timezone
 from lxml import etree, html
 
 from agricatch import xpath_functions
-from agricatch.fetch import FetchError, fetch_bytes
+from agricatch.fetch import CrawlLimitReached, FetchError, FetchSession
 from agricatch.helpers import text as text_helpers
 
 logger = logging.getLogger("agricatch.website")
@@ -90,6 +90,11 @@ class Website:
     structure = {}
     required_by_default = True
 
+    # Following detail pages and pagination multiplies requests, so both the
+    # pace and the ceiling are the importer's to set.
+    crawl_delay = 0.5
+    max_pages = 100
+
     def __init__(self):
         cls = type(self)
         self.slug = cls.slug or cls.__name__.lower()
@@ -105,26 +110,100 @@ class Website:
         records = self.collect(days=days, start_day=start_day, url=url)
         return self.persist(records)
 
-    def collect(self, days=1, start_day=None, url=None):
-        """Fetch and parse, returning a list of field dicts. Touches no database."""
-        start_day = start_day or datetime.date.today()
-        records = []
-        for page_url, crawl_date in self._urls_to_crawl(days, start_day, url):
-            self.current_url = page_url
-            try:
-                content = fetch_bytes(page_url)
-            except FetchError as exc:
-                logger.warning("%s: %s", self.slug, exc)
-                continue
+    def collect(self, days=1, start_day=None, url=None, session=None):
+        """Fetch and parse, returning a list of field dicts. Touches no database.
 
-            tree = self.parse(content)
-            nodes = self.select_nodes(tree)
-            logger.info("%s: %d records at %s", self.slug, len(nodes), page_url)
-            for node in nodes:
-                record = self.extract_record(node, crawl_date=crawl_date)
-                if record is not None:
-                    records.append(record)
+        Pass ``session`` to supply your own fetcher - anything with
+        ``get(url) -> bytes`` will do, which is how this gets tested offline.
+        """
+        start_day = start_day or datetime.date.today()
+        session = session or FetchSession(delay=self.crawl_delay, max_pages=self.max_pages)
+        visited = set()
+        records = []
+
+        try:
+            for start_url, crawl_date in self._urls_to_crawl(days, start_day, url):
+                pending = [start_url]
+                while pending:
+                    page_url = pending.pop(0)
+                    if page_url in visited:
+                        continue
+                    visited.add(page_url)
+
+                    page_records, next_pages = self._collect_page(page_url, crawl_date, session)
+                    records.extend(page_records)
+                    pending.extend(page for page in next_pages if page not in visited)
+        except CrawlLimitReached as exc:
+            logger.warning("%s: %s", self.slug, exc)
+
         return records
+
+    def _collect_page(self, url, crawl_date, session):
+        """Return ``(records, pagination_urls)`` for one page."""
+        self.current_url = url
+        try:
+            content = session.get(url)
+        except FetchError as exc:
+            logger.warning("%s: %s", self.slug, exc)
+            return [], []
+
+        tree = self.parse(content)
+        records = []
+        for node in self.select_nodes(tree):
+            record = self._record_from(node, crawl_date, session, url)
+            if record is not None:
+                records.append(record)
+
+        logger.info("%s: %d records at %s", self.slug, len(records), url)
+        return records, self._pagination_urls(tree, url)
+
+    def _record_from(self, node, crawl_date, session, base_url):
+        """Extract one record, following ``object_url`` to a detail page if set."""
+        spec = self.structure.get("object_url")
+        if not spec:
+            return self.extract_record(node, crawl_date, session=session, base_url=base_url)
+
+        if not isinstance(spec, dict):
+            spec = {"xpath": spec}
+        href = self._extract_field(node, spec, session=session, base_url=base_url)
+        if not href:
+            logger.debug("%s: no object_url on a record at %s", self.slug, base_url)
+            return None
+
+        detail_url = text_helpers.relative_url_to_absolute(href, base_url)
+        try:
+            content = session.get(detail_url)
+        except FetchError as exc:
+            logger.warning("%s: %s", self.slug, exc)
+            return None
+
+        scope = self.parse(content)
+        child_xpath = self.structure.get("object_url_child_xpath")
+        if child_xpath:
+            found = self.xpath(scope, child_xpath)
+            if not found:
+                logger.debug("%s: %s has no %s", self.slug, detail_url, child_xpath)
+                return None
+            scope = found[0]
+
+        return self.extract_record(scope, crawl_date, session=session, base_url=detail_url)
+
+    def _pagination_urls(self, tree, base_url):
+        """Absolute URLs of further index pages, from the ``pagination`` xpath."""
+        spec = self.structure.get("pagination")
+        if not spec:
+            return []
+
+        expression = spec["xpath"] if isinstance(spec, dict) else spec
+        urls = []
+        for found in self.xpath(tree, expression):
+            href = found if isinstance(found, str) else found.get("href")
+            if not href:
+                continue
+            absolute = text_helpers.relative_url_to_absolute(href, base_url)
+            if absolute != base_url and absolute not in urls:
+                urls.append(absolute)
+        return urls
 
     def persist(self, records):
         """Write records, keyed on the content hash so re-runs update in place."""
@@ -201,15 +280,16 @@ class Website:
 
     # ---- extraction ----------------------------------------------------
 
-    def extract_record(self, node, crawl_date=None):
+    def extract_record(self, node, crawl_date=None, session=None, base_url=None):
         """Build one record dict, or None when a required field is missing."""
         crawl_date = crawl_date or datetime.date.today()
-        record = self._extract_fields(node, self.structure.get("fields", {}), crawl_date)
+        fields = self.structure.get("fields", {})
+        record = self._extract_fields(node, fields, crawl_date, session, base_url)
         if record is None:
             return None
         return self.hydrate(record, node)
 
-    def _extract_fields(self, node, fields, crawl_date):
+    def _extract_fields(self, node, fields, crawl_date, session=None, base_url=None):
         """Extract a set of field specs against ``node``.
 
         Returns None if any required field is missing, which is how a record
@@ -220,7 +300,7 @@ class Website:
             required = spec.get("required", self.required_by_default)
 
             if spec.get("type") == "table":
-                value = self._extract_table(node, spec, crawl_date)
+                value = self._extract_table(node, spec, crawl_date, session, base_url)
                 if value is None:
                     if required:
                         logger.debug("%s: dropping record, %r missing", self.slug, name)
@@ -229,7 +309,7 @@ class Website:
                 record[name] = value
                 continue
 
-            raw = self._extract_field(node, spec)
+            raw = self._extract_field(node, spec, session=session, base_url=base_url)
             if raw in (None, ""):
                 if required:
                     logger.debug("%s: dropping record, %r missing", self.slug, name)
@@ -249,7 +329,7 @@ class Website:
 
         return record
 
-    def _extract_table(self, node, spec, crawl_date):
+    def _extract_table(self, node, spec, crawl_date, session=None, base_url=None):
         """Extract a nested record for a related model.
 
         ``child_xpath`` narrows the scope first, for when the related fields sit
@@ -269,7 +349,7 @@ class Website:
                 return None
             scope = found[0]
 
-        values = self._extract_fields(scope, fields, crawl_date)
+        values = self._extract_fields(scope, fields, crawl_date, session, base_url)
         if not values:
             return None
 
@@ -286,7 +366,12 @@ class Website:
         """Hook for subclasses to adjust a record before it is persisted."""
         return record
 
-    def _extract_field(self, node, spec):
+    def _extract_field(self, node, spec, session=None, base_url=None):
+        if isinstance(spec, dict) and spec.get("url"):
+            node = self._follow_field_url(node, spec, session, base_url)
+            if node is None:
+                return None
+
         expression = spec["xpath"] if isinstance(spec, dict) else spec
         try:
             result = self.xpath(node, expression)
@@ -305,6 +390,27 @@ class Website:
             else:
                 value = func(value)
         return value
+
+    def _follow_field_url(self, node, spec, session, base_url):
+        """Fetch the page a field lives on, when it is not the record's own page.
+
+        ``url`` is an xpath to the address; ``xpath`` is then evaluated against
+        whatever comes back.
+        """
+        if session is None:
+            logger.warning("%s: field needs a fetch but no session was given", self.slug)
+            return None
+
+        href = self._node_to_text(self.xpath(node, spec["url"]))
+        if not href:
+            return None
+
+        target = text_helpers.relative_url_to_absolute(href, base_url or self.current_url or "")
+        try:
+            return self.parse(session.get(target))
+        except FetchError as exc:
+            logger.warning("%s: %s", self.slug, exc)
+            return None
 
     @staticmethod
     def _node_to_text(result):
