@@ -6,29 +6,39 @@ BASE_URL = "https://www.kidsil.net/"
 
 
 class Kidsil(Website):
-    # A blog rather than a feed, so this one is scraped as HTML.
+    """A blog rather than a feed, so this one is scraped as HTML.
+
+    The listing only carries a ~160 character excerpt while the post itself runs
+    to a couple of thousand, so the fields are read off each post's own page via
+    ``object_url``. That costs one request per post, which is what ``max_pages``
+    is bounding: an index page plus its five posts, twice over.
+    """
+
     parser = "html"
+    max_pages = 12
+
     url_info = {"url": BASE_URL}
     structure = {
         "child_xpath": '//ul[contains(@class,"post-list")]/li',
+        "object_url": "h2/a/@href",
+        "pagination": '//a[contains(@href,"/page/")]',
         "fields": {
-            "name": {"xpath": "h2/a"},
-            "link": {"xpath": "h2/a/@href"},
-            "description": {
-                "xpath": 'div[contains(@class,"post-content")]',
-                "required": False,
-            },
+            "name": {"xpath": '//article//h1[contains(@class,"post-title")]'},
+            "link": {"xpath": '//link[@rel="canonical"]/@href'},
+            "description": {"xpath": '//article//div[contains(@class,"post-content")]'},
             "image": {
-                "xpath": 'div[contains(@class,"post-image-wrapper")]//img/@src',
+                "xpath": '//article//div[contains(@class,"post-image-wrapper")]//img/@src',
                 "required": False,
             },
-            "time": {"type": "time", "xpath": 'div[contains(@class,"post-meta")]/a'},
+            "time": {
+                "type": "time",
+                "xpath": '//article//div[contains(@class,"post-meta")]/a',
+            },
         },
     }
 
     def hydrate(self, record, node):
-        # Links are site-relative and images are protocol-relative (//media...).
-        for key in ("link", "image"):
-            if record.get(key):
-                record[key] = urljoin(BASE_URL, record[key])
+        # Images are served protocol-relative (//media.kidsil.net/...).
+        if record.get("image"):
+            record["image"] = urljoin(BASE_URL, record["image"])
         return record

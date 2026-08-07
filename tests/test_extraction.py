@@ -7,7 +7,6 @@ from lxml import html as lxml_html
 
 from tech.websites.cnet import Cnet
 from tech.websites.gizmodo import Gizmodo
-from tech.websites.kidsil import Kidsil
 from tech.websites.techcrunch import Techcrunch
 
 
@@ -17,30 +16,21 @@ def records_from(importer, payload):
     return nodes, [importer.extract_record(node) for node in nodes]
 
 
-@pytest.mark.parametrize(
-    "importer_class,fixture,expected",
-    [
-        (Techcrunch, "techcrunch.xml", 20),
-        (Gizmodo, "gizmodo.xml", 20),
-        (Cnet, "cnet.xml", 25),
-        (Kidsil, "kidsil.html", 5),
-    ],
-)
+FEEDS = [
+    (Techcrunch, "techcrunch.xml", 20),
+    (Gizmodo, "gizmodo.xml", 20),
+    (Cnet, "cnet.xml", 25),
+]
+
+
+@pytest.mark.parametrize("importer_class,fixture,expected", FEEDS)
 def test_every_node_yields_a_record(importer_class, fixture, expected, fixture_bytes):
     nodes, records = records_from(importer_class(), fixture_bytes(fixture))
     assert len(nodes) == expected
     assert [r for r in records if r is not None] == records
 
 
-@pytest.mark.parametrize(
-    "importer_class,fixture",
-    [
-        (Techcrunch, "techcrunch.xml"),
-        (Gizmodo, "gizmodo.xml"),
-        (Cnet, "cnet.xml"),
-        (Kidsil, "kidsil.html"),
-    ],
-)
+@pytest.mark.parametrize("importer_class,fixture", [(cls, fixture) for cls, fixture, _ in FEEDS])
 def test_core_fields_are_populated(importer_class, fixture, fixture_bytes):
     _, records = records_from(importer_class(), fixture_bytes(fixture))
     for record in records:
@@ -56,21 +46,6 @@ def test_rss_author_comes_from_the_dc_namespace(fixture_bytes):
     assert authors
     assert all(a.model == "Author" for a in authors)
     assert all(a.values["name"].strip() for a in authors)
-
-
-def test_kidsil_urls_are_absolute(fixture_bytes):
-    _, records = records_from(Kidsil(), fixture_bytes("kidsil.html"))
-    for record in records:
-        assert record["link"].startswith("https://www.kidsil.net/")
-        if record.get("image"):
-            assert record["image"].startswith("https://")
-
-
-def test_kidsil_has_no_author_and_survives_it(fixture_bytes):
-    """The blog exposes no byline; an optional field must not drop the record."""
-    _, records = records_from(Kidsil(), fixture_bytes("kidsil.html"))
-    assert len(records) == 5
-    assert all("author" not in r for r in records)
 
 
 def test_html_parser_would_lose_the_rss_link(fixture_bytes):

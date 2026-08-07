@@ -15,13 +15,26 @@ pytestmark = pytest.mark.live
 
 @pytest.mark.parametrize("name", ["techcrunch", "gizmodo", "cnet", "kidsil"])
 def test_source_still_yields_usable_records(name):
-    records = load_importer(name).collect(days=1)
+    importer = load_importer(name)
+    # Enough to prove the layout still parses without crawling a whole blog.
+    importer.max_pages = 2
+    records = importer.collect(days=1)
 
     assert records, f"{name} returned nothing; the source layout probably changed"
     for record in records:
         assert record["name"].strip()
         assert record["link"].startswith("http")
         assert isinstance(record["time"], datetime.datetime)
+
+
+def test_following_a_detail_page_beats_the_listing_excerpt():
+    """kidsil's index carries a short excerpt; the post itself is far longer."""
+    importer = load_importer("kidsil")
+    importer.max_pages = 2
+    records = importer.collect(days=1)
+
+    assert records
+    assert len(records[0]["description"]) > 1000
 
 
 @pytest.mark.django_db
