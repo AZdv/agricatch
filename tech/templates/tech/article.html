@@ -1,0 +1,17 @@
+{% extends "tech/base.html" %}
+
+{% block title %}{{ article.name }}{% endblock %}
+
+{% block content %}
+  <article>
+    <h1>{{ article.name }}</h1>
+    <p>
+      {% if article.author %}{{ article.author }} &middot; {% endif %}
+      {% if article.time %}{{ article.time }} &middot; {% endif %}
+      {% if article.website %}{{ article.website }}{% endif %}
+    </p>
+    {% if article.image %}<img src="{{ article.image }}" alt="">{% endif %}
+    <div>{{ article.description }}</div>
+    {% if article.link %}<p><a href="{{ article.link }}">Read the original</a></p>{% endif %}
+  </article>
+{% endblock %}

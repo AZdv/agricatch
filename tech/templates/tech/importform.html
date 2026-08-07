@@ -1,0 +1,19 @@
+{% extends "tech/base.html" %}
+
+{% block title %}Run an importer{% endblock %}
+
+{% block content %}
+  <h1>Run an importer</h1>
+
+  {% if result %}
+    <p>
+      {{ result.created }} new, {{ result.updated }} updated, {{ result.skipped }} skipped.
+    </p>
+  {% endif %}
+
+  <form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Import</button>
+  </form>
+{% endblock %}
