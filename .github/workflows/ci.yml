@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # DEBUG is on so settings falls back to its development key; nothing here is
+  # a real secret, and the offline suite never opens a socket.
+  DJANGO_DEBUG: "1"
+
+jobs:
+  check:
+    name: Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Formatting
+        run: ruff format --check .
+
+      - name: Types
+        run: mypy agricatch tech tests
+
+      - name: Django checks
+        run: python manage.py check
+
+      - name: Migrations are in sync with the models
+        run: python manage.py makemigrations --check --dry-run
+
+      - name: Tests
+        run: coverage run -m pytest -q
+
+      - name: Coverage
+        run: coverage report

@@ -1,6 +1,8 @@
 ![AgriCatch Logo](https://azdv.github.io/agricatch/images/logo.png)
 =========
 
+[![CI](https://github.com/AZdv/agricatch/actions/workflows/ci.yml/badge.svg)](https://github.com/AZdv/agricatch/actions/workflows/ci.yml)
+
 Declarative data aggregation for Django.
 
 This started as an algorithm I wrote in vanilla PHP, then moved to Yii. Eventually I
@@ -151,6 +153,15 @@ Hitting `max_pages` is not an error. The crawl stops, logs where it got to, and
 returns everything gathered so far. Pages already fetched are never fetched twice,
 and a pagination loop that points back at itself terminates rather than spinning.
 
+Every detail page on an index is fetched as one batch, up to `max_concurrency` at
+a time. **Overlapping requests never speeds up the knocking:** `crawl_delay` spaces
+the moment each request *starts*, held under a lock, so a site sees at most one new
+request every `crawl_delay` seconds however many workers are running. Concurrency
+only helps when a server is slow to answer, which is exactly when it matters -
+four workers against a host taking twenty seconds to reply finish four times
+sooner while requesting at the same rate. There is a test pinning that property,
+because it is the one that stops this getting anyone banned.
+
 `collect()` takes a `session` argument (anything with `get(url) -> bytes`), which
 is how the crawling tests run against saved pages instead of the network.
 
@@ -241,17 +252,28 @@ hold. Pass `lat_field` / `lon_field` if your columns are named differently.
 The box is padded by a fraction of a millimetre: it has to be a superset, because
 anything it drops never reaches the distance check.
 
-## Tests
+## Tests and checks
 
 ```bash
-pytest              # offline, uses saved captures in tests/fixtures/
-pytest -m live      # hits the real feeds
+pytest                       # offline, uses saved captures in tests/fixtures/
+pytest -m live               # hits the real feeds
+ruff check . && ruff format --check .
+mypy agricatch tech tests    # everything is annotated, tests included
+coverage run -m pytest && coverage report
 ```
 
 The offline suite runs against real responses recorded from each source, so it checks
-actual feed shapes rather than something I made up. The `live` suite is what tells you
-a source has changed its layout. Worth running when an importer starts returning
-nothing.
+actual feed shapes rather than something I made up. It opens no sockets, so it stays
+fast and deterministic. The `live` suite is what tells you a source has changed its
+layout. Worth running when an importer starts returning nothing.
+
+CI runs the first four on every push across Python 3.11 to 3.13, and checks that the
+migrations match the models. The live suite runs weekly on its own schedule rather
+than on pushes, so a site having a bad morning never fails a pull request.
+
+Tests carry annotations too, which is not decoration: mypy skips the body of an
+unannotated function entirely, so leaving them bare means the test code is the one
+part nobody type-checks.
 
 ## Notes
 
