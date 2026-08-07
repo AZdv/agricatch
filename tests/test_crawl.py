@@ -5,6 +5,10 @@ they check the shapes the site actually has. The synthetic ones cover the
 mechanics that no source here happens to use.
 """
 
+import threading
+import time
+from collections.abc import Callable, Iterable
+
 import pytest
 
 from agricatch.fetch import CrawlLimitReached, FetchError, FetchSession
@@ -19,19 +23,29 @@ DETAIL = "https://www.kidsil.net/2026/07/singlefile-swallowed-aws-cost-explorer-
 class FakeSession:
     """Serves saved pages and 404s anything else, recording what was asked for."""
 
-    def __init__(self, pages):
+    def __init__(self, pages: dict[str, bytes]) -> None:
         self.pages = pages
-        self.requested = []
+        self.requested: list[str] = []
+        self.prefetched: list[list[str]] = []
 
-    def get(self, url):
+    def get(self, url: str) -> bytes:
         self.requested.append(url)
         if url not in self.pages:
             raise FetchError(f"no such page: {url}")
         return self.pages[url]
 
+    def prefetch(self, urls: Iterable[str]) -> None:
+        self.prefetched.append(list(urls))
+
+
+class GetOnlySession(FakeSession):
+    """A stand-in with no prefetch, to prove the crawl copes without one."""
+
+    prefetch = None  # type: ignore[assignment]
+
 
 @pytest.fixture
-def kidsil_pages(fixture_bytes):
+def kidsil_pages(fixture_bytes: Callable[[str], bytes]) -> dict[str, bytes]:
     return {
         INDEX: fixture_bytes("kidsil.html"),
         PAGE_2: fixture_bytes("kidsil-page2.html"),
@@ -42,7 +56,7 @@ def kidsil_pages(fixture_bytes):
 # ---- object_url, against the real site ------------------------------
 
 
-def test_fields_come_from_the_detail_page(kidsil_pages):
+def test_fields_come_from_the_detail_page(kidsil_pages: dict[str, bytes]) -> None:
     session = FakeSession({INDEX: kidsil_pages[INDEX], DETAIL: kidsil_pages[DETAIL]})
     records = Kidsil().collect(session=session)
 
@@ -53,7 +67,7 @@ def test_fields_come_from_the_detail_page(kidsil_pages):
     assert record["time"].year == 2026
 
 
-def test_the_detail_page_body_is_the_full_post(kidsil_pages):
+def test_the_detail_page_body_is_the_full_post(kidsil_pages: dict[str, bytes]) -> None:
     """The point of the exercise: the listing only carries an excerpt."""
     session = FakeSession({INDEX: kidsil_pages[INDEX], DETAIL: kidsil_pages[DETAIL]})
     body = Kidsil().collect(session=session)[0]["description"]
@@ -62,26 +76,26 @@ def test_the_detail_page_body_is_the_full_post(kidsil_pages):
     assert "fabricated" in body or "SingleFile" in body
 
 
-def test_the_index_is_fetched_before_any_detail(kidsil_pages):
+def test_the_index_is_fetched_before_any_detail(kidsil_pages: dict[str, bytes]) -> None:
     session = FakeSession({INDEX: kidsil_pages[INDEX], DETAIL: kidsil_pages[DETAIL]})
     Kidsil().collect(session=session)
     assert session.requested[0] == INDEX
     assert DETAIL in session.requested
 
 
-def test_an_unreachable_detail_page_drops_only_that_record(kidsil_pages):
+def test_an_unreachable_detail_page_drops_only_that_record(kidsil_pages: dict[str, bytes]) -> None:
     """Four of the five posts 404 here; the run must still yield the fifth."""
     session = FakeSession({INDEX: kidsil_pages[INDEX], DETAIL: kidsil_pages[DETAIL]})
     assert len(Kidsil().collect(session=session)) == 1
 
 
-def test_images_are_absolutised_from_the_detail_page(kidsil_pages):
+def test_images_are_absolutised_from_the_detail_page(kidsil_pages: dict[str, bytes]) -> None:
     session = FakeSession({INDEX: kidsil_pages[INDEX], DETAIL: kidsil_pages[DETAIL]})
     image = Kidsil().collect(session=session)[0]["image"]
     assert image.startswith("https://media.kidsil.net/")
 
 
-def test_the_blog_has_no_byline_and_records_survive_it(kidsil_pages):
+def test_the_blog_has_no_byline_and_records_survive_it(kidsil_pages: dict[str, bytes]) -> None:
     session = FakeSession({INDEX: kidsil_pages[INDEX], DETAIL: kidsil_pages[DETAIL]})
     assert "author" not in Kidsil().collect(session=session)[0]
 
@@ -89,16 +103,18 @@ def test_the_blog_has_no_byline_and_records_survive_it(kidsil_pages):
 # ---- pagination ------------------------------------------------------
 
 
-def test_pagination_follows_the_next_link(kidsil_pages):
+def test_pagination_follows_the_next_link(kidsil_pages: dict[str, bytes]) -> None:
     session = FakeSession(kidsil_pages)
     Kidsil().collect(session=session)
     assert PAGE_2 in session.requested
 
 
-def test_an_endless_chain_stops_at_the_budget_with_records_intact(monkeypatch):
+def test_an_endless_chain_stops_at_the_budget_with_records_intact(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """A "next page" link that goes on forever must end at max_pages, not raise."""
 
-    def endless(url, timeout=None):
+    def endless(url: str, timeout: float | None = None) -> bytes:
         number = int(url.rsplit("/", 1)[1])
         return (
             f'<html><ul><li>page{number}</li></ul><a href="/{number + 1}">next</a></html>'
@@ -119,7 +135,7 @@ def test_an_endless_chain_stops_at_the_budget_with_records_intact(monkeypatch):
     assert [r["name"] for r in records] == ["page0", "page1", "page2"]
 
 
-def test_a_page_is_never_visited_twice():
+def test_a_page_is_never_visited_twice() -> None:
     class Loop(Website):
         parser = "html"
         url_info = {"url": "https://example.com/a"}
@@ -144,7 +160,7 @@ def test_a_page_is_never_visited_twice():
 # ---- per-field url and nested scoping --------------------------------
 
 
-def test_a_single_field_can_come_from_another_page():
+def test_a_single_field_can_come_from_another_page() -> None:
     class SplitFields(Website):
         parser = "html"
         url_info = {"url": "https://example.com/"}
@@ -169,7 +185,9 @@ def test_a_single_field_can_come_from_another_page():
     assert record["description"] == "the whole thing"
 
 
-def test_a_field_needing_a_fetch_without_a_session_is_dropped(fixture_bytes):
+def test_a_field_needing_a_fetch_without_a_session_is_dropped(
+    fixture_bytes: Callable[[str], bytes],
+) -> None:
     class NeedsFetch(Website):
         parser = "html"
         url_info = {"url": "https://example.com/"}
@@ -184,7 +202,7 @@ def test_a_field_needing_a_fetch_without_a_session_is_dropped(fixture_bytes):
     assert importer.extract_record(node) is None
 
 
-def test_object_url_child_xpath_scopes_into_the_detail_page():
+def test_object_url_child_xpath_scopes_into_the_detail_page() -> None:
     class Scoped(Website):
         parser = "html"
         url_info = {"url": "https://example.com/"}
@@ -205,7 +223,7 @@ def test_object_url_child_xpath_scopes_into_the_detail_page():
     assert Scoped().collect(session=FakeSession(pages))[0]["name"] == "real title"
 
 
-def test_a_missing_object_url_skips_the_record():
+def test_a_missing_object_url_skips_the_record() -> None:
     class NoLink(Website):
         parser = "html"
         url_info = {"url": "https://example.com/"}
@@ -222,10 +240,10 @@ def test_a_missing_object_url_skips_the_record():
 # ---- the session itself ----------------------------------------------
 
 
-def test_session_serves_a_repeated_url_from_memory(monkeypatch):
+def test_session_serves_a_repeated_url_from_memory(monkeypatch: pytest.MonkeyPatch) -> None:
     calls = []
 
-    def fake_fetch(url, timeout=None):
+    def fake_fetch(url: str, timeout: float | None = None) -> bytes:
         calls.append(url)
         return b"<html></html>"
 
@@ -239,7 +257,7 @@ def test_session_serves_a_repeated_url_from_memory(monkeypatch):
     assert session.fetched == 1
 
 
-def test_session_stops_at_its_page_budget(monkeypatch):
+def test_session_stops_at_its_page_budget(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("agricatch.fetch.fetch_bytes", lambda url, timeout=None: b"<html></html>")
     session = FetchSession(delay=0, max_pages=2)
 
@@ -249,9 +267,9 @@ def test_session_stops_at_its_page_budget(monkeypatch):
         session.get("https://example.com/3")
 
 
-def test_session_paces_requests(monkeypatch):
+def test_session_paces_requests(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("agricatch.fetch.fetch_bytes", lambda url, timeout=None: b"<html></html>")
-    slept = []
+    slept: list[float] = []
     monkeypatch.setattr("agricatch.fetch.time.sleep", slept.append)
 
     session = FetchSession(delay=0.5)
@@ -259,3 +277,119 @@ def test_session_paces_requests(monkeypatch):
     session.get("https://example.com/2")
 
     assert slept and slept[0] > 0
+
+
+# ---- overlapping requests --------------------------------------------
+
+
+def slow_server(latency: float, starts: list[float], lock: threading.Lock) -> Callable[..., bytes]:
+    def fetch(url: str, timeout: float | None = None) -> bytes:
+        with lock:
+            starts.append(time.monotonic())
+        time.sleep(latency)
+        return b"<html></html>"
+
+    return fetch
+
+
+def test_detail_pages_are_prefetched_together(kidsil_pages: dict[str, bytes]) -> None:
+    session = FakeSession({INDEX: kidsil_pages[INDEX], DETAIL: kidsil_pages[DETAIL]})
+    Kidsil().collect(session=session)
+
+    assert session.prefetched, "the index's detail links should be warmed in one batch"
+    assert DETAIL in session.prefetched[0]
+    assert len(session.prefetched[0]) == 5
+
+
+def test_a_session_without_prefetch_still_works(kidsil_pages: dict[str, bytes]) -> None:
+    session = GetOnlySession({INDEX: kidsil_pages[INDEX], DETAIL: kidsil_pages[DETAIL]})
+    assert len(Kidsil().collect(session=session)) == 1
+
+
+def test_concurrency_never_raises_the_request_rate(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The property that keeps this from getting anyone banned.
+
+    Four workers may be in flight at once, but request *starts* stay spaced by
+    ``delay``, so the host is knocked at exactly the serial rate.
+    """
+    starts: list[float] = []
+    lock = threading.Lock()
+    monkeypatch.setattr("agricatch.fetch.fetch_bytes", slow_server(0.15, starts, lock))
+
+    session = FetchSession(delay=0.05, max_concurrency=4, max_pages=None)
+    session.prefetch([f"https://example.com/{n}" for n in range(8)])
+
+    assert len(starts) == 8
+    ordered = sorted(starts)
+    gaps = [b - a for a, b in zip(ordered, ordered[1:], strict=False)]
+    assert min(gaps) >= 0.045, f"requests started {min(gaps):.3f}s apart, faster than the delay"
+
+
+def test_overlapping_beats_serial_when_the_server_is_slow(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    urls = [f"https://example.com/{n}" for n in range(6)]
+
+    def run(concurrency: int) -> float:
+        starts: list[float] = []
+        lock = threading.Lock()
+        monkeypatch.setattr("agricatch.fetch.fetch_bytes", slow_server(0.15, starts, lock))
+        session = FetchSession(delay=0.0, max_concurrency=concurrency, max_pages=None)
+        started = time.monotonic()
+        session.prefetch(urls)
+        return time.monotonic() - started
+
+    serial = run(1)
+    overlapped = run(3)
+    assert overlapped < serial * 0.8, f"serial {serial:.2f}s vs overlapped {overlapped:.2f}s"
+
+
+def test_prefetch_skips_what_is_already_cached(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[str] = []
+
+    def counting(url: str, timeout: float | None = None) -> bytes:
+        calls.append(url)
+        return b"<html></html>"
+
+    monkeypatch.setattr("agricatch.fetch.fetch_bytes", counting)
+    session = FetchSession(delay=0, max_concurrency=2)
+
+    session.get("https://example.com/a")
+    session.prefetch(["https://example.com/a", "https://example.com/b"])
+
+    assert sorted(calls) == ["https://example.com/a", "https://example.com/b"]
+
+
+def test_prefetch_dedupes_repeated_urls(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[str] = []
+
+    def counting(url: str, timeout: float | None = None) -> bytes:
+        calls.append(url)
+        return b"<html></html>"
+
+    monkeypatch.setattr("agricatch.fetch.fetch_bytes", counting)
+    session = FetchSession(delay=0, max_concurrency=3)
+    session.prefetch(["https://example.com/a"] * 5)
+
+    assert calls == ["https://example.com/a"]
+
+
+def test_prefetch_swallows_failures(monkeypatch: pytest.MonkeyPatch) -> None:
+    def sometimes(url: str, timeout: float | None = None) -> bytes:
+        if url.endswith("bad"):
+            raise FetchError("nope")
+        return b"<html></html>"
+
+    monkeypatch.setattr("agricatch.fetch.fetch_bytes", sometimes)
+    session = FetchSession(delay=0, max_concurrency=2)
+
+    session.prefetch(["https://example.com/bad", "https://example.com/good"])
+    assert session.get("https://example.com/good") == b"<html></html>"
+
+
+def test_the_budget_holds_under_concurrency(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("agricatch.fetch.fetch_bytes", lambda url, timeout=None: b"<html></html>")
+    session = FetchSession(delay=0, max_concurrency=8, max_pages=5)
+
+    session.prefetch([f"https://example.com/{n}" for n in range(20)])
+    assert session.fetched == 5
