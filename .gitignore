@@ -15,6 +15,9 @@ env/
 logs/
 *.log
 
+# derived from GeoNames; rebuild with manage.py fetch_geodata
+geodata/
+
 .pytest_cache/
 .ruff_cache/
 .coverage
