@@ -3,7 +3,6 @@ from __future__ import annotations
 import datetime
 
 from django.contrib.admin.views.decorators import staff_member_required
-from django.core.cache import cache
 from django.db.models import Max
 from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, render
@@ -19,8 +18,6 @@ from tech.models import Article
 SORTABLE_FIELDS = frozenset({"time", "-time", "added_at", "-added_at", "name", "-name"})
 DEFAULT_LIMIT = 100
 MAX_LIMIT = 500
-LAST_UPDATE_CACHE_KEY = "tech:articles:last_update"
-LAST_UPDATE_CACHE_SECONDS = 2 * 60 * 60
 
 
 class BadParameter(ValueError):
@@ -84,14 +81,15 @@ def articles(request: HttpRequest) -> HttpResponse:
 
 
 def _last_update() -> str | None:
-    cached = cache.get(LAST_UPDATE_CACHE_KEY)
-    if cached is not None:
-        return cached
+    """The newest added_at, asked of the database every time.
 
+    The 2013 version wrote this to a file and refreshed it every two hours,
+    which meant the endpoint whose entire job is saying "here is when the data
+    last changed" could be two hours wrong. added_at is indexed, so a single
+    aggregate is cheaper than the cache was worth.
+    """
     latest = Article.objects.aggregate(latest=Max("added_at"))["latest"]
-    value = latest.isoformat() if latest else None
-    cache.set(LAST_UPDATE_CACHE_KEY, value, LAST_UPDATE_CACHE_SECONDS)
-    return value
+    return latest.isoformat() if latest else None
 
 
 @require_http_methods(["GET"])
