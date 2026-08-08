@@ -4,6 +4,7 @@ A crawler follows links somebody else wrote, so every URL it is handed is a
 request from an untrusted party, and every feed it parses is untrusted bytes.
 """
 
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -57,6 +58,23 @@ def test_the_metadata_endpoint_is_refused_even_via_fetch_bytes() -> None:
 # ---- redirects are re-checked, not trusted ---------------------------
 
 
+class StreamedResponse:
+    """Minimal stand-in for what httpx hands back from stream()."""
+
+    def __init__(self, response: httpx.Response, chunks: Iterator[bytes] | None = None) -> None:
+        self._response = response
+        self._chunks = chunks
+
+    def __enter__(self) -> Any:
+        if self._chunks is not None:
+            chunks = self._chunks
+            self._response.iter_bytes = lambda *a, **k: chunks  # type: ignore[method-assign]
+        return self._response
+
+    def __exit__(self, *exc: Any) -> None:
+        return None
+
+
 class RedirectingClient:
     """Sends everything to one destination, once."""
 
@@ -64,12 +82,14 @@ class RedirectingClient:
         self.destination = destination
         self.requested: list[str] = []
 
-    def get(self, url: str, **kwargs: Any) -> httpx.Response:
+    def stream(self, method: str, url: str, **kwargs: Any) -> StreamedResponse:
         self.requested.append(url)
-        request = httpx.Request("GET", url)
+        request = httpx.Request(method, url)
         if len(self.requested) == 1:
-            return httpx.Response(302, headers={"location": self.destination}, request=request)
-        return httpx.Response(200, content=b"<html>ok</html>", request=request)
+            return StreamedResponse(
+                httpx.Response(302, headers={"location": self.destination}, request=request)
+            )
+        return StreamedResponse(httpx.Response(200, content=b"<html>ok</html>", request=request))
 
     def close(self) -> None:
         return None
@@ -87,13 +107,21 @@ def test_a_redirect_to_another_public_address_is_followed() -> None:
     assert fetch_bytes(f"http://{PUBLIC_IP}/start", client=client) == b"<html>ok</html>"
 
 
+def test_a_relative_redirect_resolves_against_the_current_url() -> None:
+    client = RedirectingClient("/second")
+    fetch_bytes(f"http://{PUBLIC_IP}/first/start", client=client)
+    assert client.requested[1] == f"http://{PUBLIC_IP}/second"
+
+
 def test_a_redirect_loop_gives_up() -> None:
     class Loop:
-        def get(self, url: str, **kwargs: Any) -> httpx.Response:
-            return httpx.Response(
-                302,
-                headers={"location": f"http://{PUBLIC_IP}/again"},
-                request=httpx.Request("GET", url),
+        def stream(self, method: str, url: str, **kwargs: Any) -> StreamedResponse:
+            return StreamedResponse(
+                httpx.Response(
+                    302,
+                    headers={"location": f"http://{PUBLIC_IP}/again"},
+                    request=httpx.Request(method, url),
+                )
             )
 
         def close(self) -> None:
@@ -106,16 +134,54 @@ def test_a_redirect_loop_gives_up() -> None:
 # ---- how much it is willing to swallow -------------------------------
 
 
-def test_an_oversized_response_is_refused() -> None:
-    class Huge:
-        def get(self, url: str, **kwargs: Any) -> httpx.Response:
-            return httpx.Response(200, content=b"x" * 5000, request=httpx.Request("GET", url))
+class Endless:
+    """Streams forever, counting how much was actually pulled."""
+
+    def __init__(self) -> None:
+        self.chunks_served = 0
+
+    def _forever(self) -> Iterator[bytes]:
+        while True:
+            self.chunks_served += 1
+            yield b"x" * 1024
+
+    def stream(self, method: str, url: str, **kwargs: Any) -> StreamedResponse:
+        return StreamedResponse(
+            httpx.Response(200, request=httpx.Request(method, url)), self._forever()
+        )
+
+    def close(self) -> None:
+        return None
+
+
+def test_an_endless_body_is_cut_off_rather_than_swallowed() -> None:
+    """The point of streaming: stop pulling, rather than measure it afterwards."""
+    client = Endless()
+    with pytest.raises(FetchError, match="more than"):
+        fetch_bytes(f"http://{PUBLIC_IP}/big", client=client, max_bytes=4096)
+
+    # It gave up almost immediately instead of reading an unbounded body.
+    assert client.chunks_served <= 6
+
+
+def test_a_declared_content_length_over_the_limit_is_refused_before_reading() -> None:
+    class Declares:
+        def __init__(self) -> None:
+            self.read = False
+
+        def stream(self, method: str, url: str, **kwargs: Any) -> StreamedResponse:
+            response = httpx.Response(
+                200,
+                headers={"content-length": "99999999"},
+                request=httpx.Request(method, url),
+            )
+            return StreamedResponse(response)
 
         def close(self) -> None:
             return None
 
-    with pytest.raises(FetchError, match="more than"):
-        fetch_bytes(f"http://{PUBLIC_IP}/big", client=Huge(), max_bytes=1000)
+    with pytest.raises(FetchError, match="declares more than"):
+        fetch_bytes(f"http://{PUBLIC_IP}/big", client=Declares(), max_bytes=1000)
 
 
 # ---- what it is willing to parse -------------------------------------

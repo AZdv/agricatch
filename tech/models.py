@@ -89,8 +89,10 @@ class Article(models.Model):
             if isinstance(value, datetime.datetime):
                 value = value.isoformat()
             elif isinstance(value, Website):
-                # The slug, not __str__, so renaming a site does not re-key
-                # every article it ever produced.
+                # The slug rather than __str__, so changing a site's display
+                # name leaves its articles alone. Changing the *slug* does
+                # re-key them, which is the price of a key that does not depend
+                # on database row ids.
                 value = value.slug
             parts.append("" if value is None else str(value))
         return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()

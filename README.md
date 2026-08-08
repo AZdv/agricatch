@@ -128,10 +128,19 @@ are not negotiable:
   `169.254.169.254` and have it read cloud instance credentials. Redirects are
   followed by hand for exactly this reason; letting the client follow them means
   an allowed URL can bounce to a blocked one unchecked.
-- **A size ceiling** on any single response, so a source serving an endless body
-  cannot exhaust memory.
+- **A size ceiling**, enforced while the body streams in. Counting after reading
+  the whole thing spends the memory before consulting the limit, which is no
+  limit at all.
 - **No XML entity resolution.** A feed containing
   `<!ENTITY x SYSTEM "file:///etc/passwd">` gets an empty field, not the file.
+
+The address check has a known limit worth stating plainly: it resolves the name,
+approves it, and the connection then resolves it again, so a domain that answers
+publicly on the first lookup and privately on the second gets through. Closing
+that means connecting to the vetted IP rather than the name, which breaks TLS
+hostname verification unless handled with more care than it earns here. Against
+genuinely hostile input, put an egress firewall in front and treat this as one
+layer rather than the only one.
 
 ### Crawling more than one page
 

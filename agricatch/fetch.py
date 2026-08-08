@@ -10,7 +10,7 @@ import time
 from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Protocol
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 import httpx
 
@@ -39,9 +39,13 @@ class CrawlLimitReached(RuntimeError):
 
 
 class HTTPClient(Protocol):
-    """The part of ``httpx.Client`` this module uses, so it can be substituted."""
+    """The part of ``httpx.Client`` this module uses, so it can be substituted.
 
-    def get(self, url: str, **kwargs: Any) -> httpx.Response: ...
+    ``stream`` rather than ``get``: the body has to be counted as it arrives, or
+    a size limit is only checked once the bytes are already in memory.
+    """
+
+    def stream(self, method: str, url: str, **kwargs: Any) -> Any: ...
 
     def close(self) -> None: ...
 
@@ -53,6 +57,14 @@ def check_public_url(url: str) -> None:
     is only ever a request from an untrusted party. Without this, a page could
     point at ``169.254.169.254`` and have the crawler read cloud instance
     credentials, or at ``127.0.0.1`` to reach services that trust the loopback.
+
+    Known limit: this resolves the name, approves it, and the connection then
+    resolves it again, so a domain whose DNS answers publicly on the first
+    lookup and privately on the second gets through. Closing that properly means
+    connecting to the vetted IP rather than the name, which breaks TLS hostname
+    verification unless handled with more care than it is worth here. If you are
+    crawling genuinely hostile input, put an egress firewall in front of it and
+    treat this as defence in depth rather than the only defence.
     """
     parsed = urlparse(url)
     if parsed.scheme not in ALLOWED_SCHEMES:
@@ -95,6 +107,10 @@ def fetch_bytes(
     Redirects are followed by hand rather than by httpx, so every hop gets the
     same public-address check as the original URL. Letting the client follow
     them means a permitted URL can bounce straight to a blocked one.
+
+    The body is streamed and counted as it arrives. Reading it whole and then
+    measuring it means the memory is already spent by the time the limit is
+    consulted, which is no limit at all.
     """
     headers = {"User-Agent": USER_AGENT}
     owned = client is None
@@ -105,28 +121,34 @@ def fetch_bytes(
         for _ in range(MAX_REDIRECTS + 1):
             check_public_url(target)
             try:
-                response = session.get(
-                    target, headers=headers, follow_redirects=False, timeout=timeout
-                )
+                with session.stream(
+                    "GET", target, headers=headers, follow_redirects=False, timeout=timeout
+                ) as response:
+                    if response.is_redirect:
+                        location = response.headers.get("location")
+                        if not location:
+                            raise FetchError(f"redirect without a location at {target}")
+                        # Relative Location headers are legal and common.
+                        target = urljoin(target, location)
+                        continue
+
+                    response.raise_for_status()
+
+                    declared = response.headers.get("content-length")
+                    if declared and declared.isdigit() and int(declared) > max_bytes:
+                        raise FetchError(f"{target} declares more than {max_bytes} bytes")
+
+                    chunks: list[bytes] = []
+                    total = 0
+                    for chunk in response.iter_bytes():
+                        total += len(chunk)
+                        if total > max_bytes:
+                            raise FetchError(f"{target} returned more than {max_bytes} bytes")
+                        chunks.append(chunk)
             except httpx.HTTPError as exc:
                 raise FetchError(f"could not fetch {target}: {exc}") from exc
 
-            if response.is_redirect:
-                location = response.headers.get("location")
-                if not location:
-                    raise FetchError(f"redirect without a location at {target}")
-                target = str(response.next_request.url) if response.next_request else location
-                continue
-
-            try:
-                response.raise_for_status()
-            except httpx.HTTPError as exc:
-                raise FetchError(f"could not fetch {target}: {exc}") from exc
-
-            content = response.content
-            if len(content) > max_bytes:
-                raise FetchError(f"{target} returned more than {max_bytes} bytes")
-
+            content = b"".join(chunks)
             logger.debug("fetched %s (%d bytes)", target, len(content))
             return content
 
@@ -189,6 +211,12 @@ class FetchSession:
             content = fetch_bytes(url, timeout=self.timeout)
             with self._lock:
                 self._cache[url] = content
+                # Drop the lock entry now the answer is cached, so a long crawl
+                # does not accumulate one per URL it has ever seen. Anyone
+                # already blocked on it still holds a reference and will find
+                # the cache populated; anyone arriving later makes a fresh lock
+                # and hits the cache immediately.
+                self._url_locks.pop(url, None)
             return content
 
     def _lock_for(self, url: str) -> threading.Lock:
