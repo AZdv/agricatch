@@ -156,33 +156,42 @@ class Website:
         visited: set[str] = set()
         records: list[Record] = []
 
-        try:
-            for start_url, crawl_date in self._urls_to_crawl(days, start_day, url):
-                pending = [start_url]
-                while pending:
-                    page_url = pending.pop(0)
-                    if page_url in visited:
-                        continue
-                    visited.add(page_url)
+        for start_url, crawl_date in self._urls_to_crawl(days, start_day, url):
+            pending = [start_url]
+            while pending:
+                page_url = pending.pop(0)
+                if page_url in visited:
+                    continue
+                visited.add(page_url)
 
-                    page_records, next_pages = self._collect_page(page_url, crawl_date, session)
-                    records.extend(page_records)
-                    pending.extend(page for page in next_pages if page not in visited)
-        except CrawlLimitReached as exc:
-            logger.warning("%s: %s", self.slug, exc)
+                page_records, next_pages, exhausted = self._collect_page(
+                    page_url, crawl_date, session
+                )
+                records.extend(page_records)
+                if exhausted:
+                    return records
+                pending.extend(page for page in next_pages if page not in visited)
 
         return records
 
     def _collect_page(
         self, url: str, crawl_date: datetime.date, session: Fetcher
-    ) -> tuple[list[Record], list[str]]:
-        """Return ``(records, pagination_urls)`` for one page."""
+    ) -> tuple[list[Record], list[str], bool]:
+        """Return ``(records, pagination_urls, budget_exhausted)`` for one page.
+
+        The budget can run out partway through a page, once each record costs a
+        request of its own. When it does, whatever was already extracted is
+        handed back rather than thrown away with the stack.
+        """
         self.current_url = url
         try:
             content = session.get(url)
+        except CrawlLimitReached as exc:
+            logger.warning("%s: %s", self.slug, exc)
+            return [], [], True
         except FetchError as exc:
             logger.warning("%s: %s", self.slug, exc)
-            return [], []
+            return [], [], False
 
         tree = self.parse(content)
         nodes = self.select_nodes(tree)
@@ -190,12 +199,19 @@ class Website:
 
         records: list[Record] = []
         for node in nodes:
-            record = self._record_from(node, crawl_date, session, url)
+            try:
+                record = self._record_from(node, crawl_date, session, url)
+            except CrawlLimitReached as exc:
+                logger.warning("%s: %s", self.slug, exc)
+                logger.info(
+                    "%s: %d records at %s before the budget ran out", self.slug, len(records), url
+                )
+                return records, [], True
             if record is not None:
                 records.append(record)
 
         logger.info("%s: %d records at %s", self.slug, len(records), url)
-        return records, self._pagination_urls(tree, url)
+        return records, self._pagination_urls(tree, url), False
 
     def _prefetch_details(self, nodes: Sequence[Node], session: Fetcher, base_url: str) -> None:
         """Warm every detail page on this index before extracting any of them.

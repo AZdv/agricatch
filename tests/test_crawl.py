@@ -135,6 +135,43 @@ def test_an_endless_chain_stops_at_the_budget_with_records_intact(
     assert [r["name"] for r in records] == ["page0", "page1", "page2"]
 
 
+def test_a_budget_that_runs_out_mid_page_keeps_what_was_already_extracted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Once each record costs its own request, the budget can end partway down a page.
+
+    The earlier test only ever stopped on a page boundary, so it never noticed
+    that unwinding out of the page loop threw away everything gathered on it.
+    """
+    index = b"".join(b'<li><a href="/post-%d">p</a></li>' % n for n in range(5))
+    pages = {
+        "https://example.com/": b"<html><ul>" + index + b"</ul></html>",
+        **{
+            f"https://example.com/post-{n}": f"<html><h1>Post {n}</h1></html>".encode()
+            for n in range(5)
+        },
+    }
+
+    def serve(url: str, timeout: float | None = None) -> bytes:
+        return pages[url]
+
+    monkeypatch.setattr("agricatch.fetch.fetch_bytes", serve)
+
+    class Detailed(Website):
+        parser = "html"
+        url_info = {"url": "https://example.com/"}
+        structure = {
+            "child_xpath": "//li",
+            "object_url": "a/@href",
+            "fields": {"name": {"xpath": "//h1/text()"}},
+        }
+
+    # 1 for the index + 3 details, so the budget dies on the fourth record.
+    records = Detailed().collect(session=FetchSession(delay=0, max_pages=4))
+
+    assert [r["name"] for r in records] == ["Post 0", "Post 1", "Post 2"]
+
+
 def test_a_page_is_never_visited_twice() -> None:
     class Loop(Website):
         parser = "html"
