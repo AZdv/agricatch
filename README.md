@@ -299,3 +299,17 @@ part nobody type-checks.
 
 Gawker shut down in 2016 and took the old Gizmodo feed with it; CNET has since moved
 from RSS to Atom. Both importers were repointed accordingly.
+
+## Licence
+
+MIT, see [LICENSE](LICENSE). Version 1 carried GPL-2.0; 2.0 is relicensed by me as
+the sole author.
+
+Two things in here are not mine and keep their own terms:
+
+- The offline geocoding index is built from [GeoNames](https://www.geonames.org/)
+  data, licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The
+  index itself is gitignored; the small slice under `tests/fixtures/` is a
+  derivative and carries the same terms.
+- Fixture provenance is recorded in
+  [`tests/fixtures/README.md`](tests/fixtures/README.md).
