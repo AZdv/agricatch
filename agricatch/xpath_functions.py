@@ -26,7 +26,13 @@ def _as_text(value: XPathValue) -> str:
     if value is None:
         return ""
     if hasattr(value, "text_content"):
+        # An lxml.html element.
         return str(value.text_content())
+    if hasattr(value, "itertext"):
+        # A plain XML element, which has no text_content(); without this it
+        # would stringify to its repr and put "<Element title at 0x...>" in a
+        # field.
+        return "".join(value.itertext())
     return str(value)
 
 
