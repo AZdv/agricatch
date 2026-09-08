@@ -20,7 +20,12 @@ def test_source_still_yields_usable_records(name: str) -> None:
     importer.max_pages = 2
     records = importer.collect(days=1)
 
-    assert records, f"{name} returned nothing; the source layout probably changed"
+    if not records and (turned_away := importer.refusal):
+        pytest.skip(
+            f"{name} refused the crawler ({turned_away}); an access decision, not a layout change"
+        )
+
+    assert records, f"{name} was reachable but yielded nothing; the layout probably changed"
     for record in records:
         assert record["name"].strip()
         assert record["link"].startswith("http")
@@ -32,6 +37,9 @@ def test_following_a_detail_page_beats_the_listing_excerpt() -> None:
     importer = load_importer("kidsil")
     importer.max_pages = 2
     records = importer.collect(days=1)
+
+    if not records and (turned_away := importer.refusal):
+        pytest.skip(f"kidsil refused the crawler ({turned_away})")
 
     assert records
     assert len(records[0]["description"]) > 1000

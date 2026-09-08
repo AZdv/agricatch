@@ -33,3 +33,7 @@ class Command(BaseCommand):
                     f"  {result.created} new, {result.updated} updated, {result.skipped} skipped"
                 )
             )
+            # Worth saying out loud: an empty run because a source refused us
+            # looks identical to an empty run because it had nothing new.
+            for message in result.errors:
+                self.stdout.write(self.style.WARNING(f"  ! {message}"))

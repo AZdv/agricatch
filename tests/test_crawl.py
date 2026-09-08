@@ -430,3 +430,105 @@ def test_the_budget_holds_under_concurrency(monkeypatch: pytest.MonkeyPatch) -> 
 
     session.prefetch([f"https://example.com/{n}" for n in range(20)])
     assert session.fetched == 5
+
+
+# ---- fetch failures are visible, not just logged ----------------------
+
+
+def test_a_fetch_failure_is_recorded_not_only_logged(kidsil_pages: dict[str, bytes]) -> None:
+    """No records plus no errors means the layout moved; no records plus a 403
+    means the source turned us away. A caller cannot tell those apart unless the
+    failures survive the call."""
+    session = FakeSession({INDEX: kidsil_pages[INDEX]})  # every detail page 404s
+    importer = Kidsil()
+    importer.collect(session=session)
+
+    assert importer.errors
+    assert all("no such page" in message for message in importer.errors)
+
+
+class Simple(Website):
+    """One page, no detail fetches, so the error list is entirely predictable."""
+
+    parser = "html"
+    url_info = {"url": "https://example.com/"}
+    structure = {"child_xpath": "//li", "fields": {"name": {"xpath": "text()"}}}
+
+
+ONE_PAGE = {"https://example.com/": b"<html><ul><li>only</li></ul></html>"}
+
+
+def test_a_crawl_that_reaches_everything_records_no_errors() -> None:
+    importer = Simple()
+    records = importer.collect(session=FakeSession(ONE_PAGE))
+
+    assert [r["name"] for r in records] == ["only"]
+    assert importer.errors == []
+
+
+def test_errors_from_one_run_do_not_leak_into_the_next() -> None:
+    importer = Simple()
+
+    importer.collect(session=FakeSession({}))  # nothing reachable
+    assert importer.errors
+
+    importer.collect(session=FakeSession(ONE_PAGE))  # all reachable
+    assert importer.errors == []
+
+
+def test_an_unreachable_seed_is_reported() -> None:
+    class Unreachable(Website):
+        parser = "html"
+        url_info = {"url": "https://example.com/"}
+        structure = {"child_xpath": "//li", "fields": {}}
+
+    importer = Unreachable()
+    assert importer.collect(session=FakeSession({})) == []
+    assert importer.errors
+
+
+# ---- telling "refused us" apart from "layout moved" -------------------
+
+
+class Refusing(FakeSession):
+    """Answers every request with a given refusal, the way a blocking site does."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__({})
+        self.message = message
+
+    def get(self, url: str) -> bytes:
+        self.requested.append(url)
+        raise FetchError(f"could not fetch {url}: {self.message}")
+
+
+def test_a_403_is_reported_as_a_refusal() -> None:
+    """What CI hits weekly: gizmodo answers 403 to a datacenter IP."""
+    importer = Simple()
+    assert importer.collect(session=Refusing("Client error '403 Forbidden'")) == []
+    assert importer.refusal is not None
+    assert "403" in importer.refusal
+
+
+def test_a_429_is_reported_as_a_refusal() -> None:
+    importer = Simple()
+    importer.collect(session=Refusing("Client error '429 Too Many Requests'"))
+    assert importer.refusal is not None
+
+
+def test_an_ordinary_failure_is_not_a_refusal() -> None:
+    """A 404 or a timeout is not the source turning us away on purpose."""
+    importer = Simple()
+    importer.collect(session=Refusing("Client error '404 Not Found'"))
+    assert importer.errors
+    assert importer.refusal is None
+
+
+def test_reaching_the_page_and_finding_nothing_is_not_a_refusal() -> None:
+    """The case that SHOULD go red: we got in, the xpaths matched nothing."""
+    importer = Simple()
+    empty = {"https://example.com/": b"<html><ul></ul></html>"}
+
+    assert importer.collect(session=FakeSession(empty)) == []
+    assert importer.errors == []
+    assert importer.refusal is None

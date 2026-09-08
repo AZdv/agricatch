@@ -45,6 +45,11 @@ xpath_functions.register()
 
 DATE_PLACEHOLDERS = ("%d", "%m", "%Y")
 
+# A source answering 403/429 has made a decision about us. That is a different
+# event from "the markup moved", needs a different response, and conflating the
+# two turns a scheduled check into a false alarm nobody reads.
+REFUSAL_MARKERS = ("403", "429", "Forbidden", "Too Many Requests")
+
 # lxml elements and xpath results have no public types worth threading through
 # here, and the model class is resolved from settings at runtime, so both travel
 # as Any rather than being faked into something more specific.
@@ -123,6 +128,10 @@ class Website:
         self.structure = copy.deepcopy(cls.structure)
         self.namespaces = dict(cls.namespaces)
         self.current_url: str | None = None
+        # Fetch failures met during the last collect(). A caller that gets no
+        # records needs to know whether nothing was there or nothing could be
+        # reached; those are different problems with different fixes.
+        self.errors: list[str] = []
 
     # ---- public API ----------------------------------------------------
 
@@ -148,6 +157,7 @@ class Website:
         ``get(url) -> bytes`` will do, which is how this gets tested offline.
         """
         start_day = start_day or datetime.date.today()
+        self.errors = []
         session = session or FetchSession(
             delay=self.crawl_delay,
             max_pages=self.max_pages,
@@ -190,7 +200,7 @@ class Website:
             logger.warning("%s: %s", self.slug, exc)
             return [], [], True
         except FetchError as exc:
-            logger.warning("%s: %s", self.slug, exc)
+            self._record_error(exc)
             return [], [], False
 
         tree = self.parse(content)
@@ -255,7 +265,7 @@ class Website:
         try:
             content = session.get(detail_url)
         except FetchError as exc:
-            logger.warning("%s: %s", self.slug, exc)
+            self._record_error(exc)
             return None
 
         scope = self.parse(content)
@@ -296,7 +306,7 @@ class Website:
         )
 
         writable = {f.name for f in model._meta.get_fields() if f.concrete}
-        result = ImportResult()
+        result = ImportResult(errors=list(self.errors))
         for record in records:
             unknown = set(record) - writable
             if unknown:
@@ -317,6 +327,24 @@ class Website:
             else:
                 result.updated += 1
         return result
+
+    @property
+    def refusal(self) -> str | None:
+        """The first fetch error that looks like the source turning us away.
+
+        Lets a caller tell "it would not let us in" apart from "we got in and
+        found nothing", which want opposite responses: back off, versus go and
+        fix the xpaths.
+        """
+        for message in self.errors:
+            if any(marker in message for marker in REFUSAL_MARKERS):
+                return message
+        return None
+
+    def _record_error(self, exc: Exception) -> None:
+        """Log a fetch failure and keep it, so callers can see why records are missing."""
+        logger.warning("%s: %s", self.slug, exc)
+        self.errors.append(str(exc))
 
     def get_model(self) -> Any:
         """The target model, resolved from settings, so untyped by necessity."""
@@ -532,7 +560,7 @@ class Website:
         try:
             return self.parse(session.get(target))
         except FetchError as exc:
-            logger.warning("%s: %s", self.slug, exc)
+            self._record_error(exc)
             return None
 
     @staticmethod
