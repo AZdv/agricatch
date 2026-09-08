@@ -35,4 +35,7 @@ jobs:
           pip install -e ".[dev]"
 
       - name: Hit the real sources
-        run: pytest -q -m live
+        # -rs prints WHY anything skipped. A silent skip in a scheduled check is
+        # nearly as bad as a false failure: if every source started refusing us,
+        # the run would still be green and say nothing.
+        run: pytest -q -rs -m live
