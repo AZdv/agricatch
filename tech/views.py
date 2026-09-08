@@ -18,6 +18,7 @@ from tech.models import Article
 SORTABLE_FIELDS = frozenset({"time", "-time", "added_at", "-added_at", "name", "-name"})
 DEFAULT_LIMIT = 100
 MAX_LIMIT = 500
+MAX_OFFSET = 100_000
 
 
 class BadParameter(ValueError):
@@ -41,11 +42,14 @@ def articles(request: HttpRequest) -> HttpResponse:
 
     try:
         requested_limit = _int_param(request, "limit", DEFAULT_LIMIT)
+        requested_offset = _int_param(request, "offset", 0)
         days_future = _int_param(request, "days_future", None)
+        days_past = _int_param(request, "days_past", None)
     except BadParameter as exc:
         return HttpResponseBadRequest(str(exc))
 
     limit = max(1, min(requested_limit or DEFAULT_LIMIT, MAX_LIMIT))
+    offset = max(0, min(requested_offset or 0, MAX_OFFSET))
     queryset = Article.objects.select_related("website", "author")
 
     sort_by = request.GET.get("sort_by")
@@ -56,11 +60,19 @@ def articles(request: HttpRequest) -> HttpResponse:
             )
         queryset = queryset.order_by(sort_by)
 
+    # Both windows are measured from the start of today, so this morning's
+    # articles count either way. days_future is inherited from the events domain
+    # this began in, where "what is coming up" is the natural question; for a
+    # news feed days_past is usually the one you want.
+    midnight = timezone.localtime().replace(hour=0, minute=0, second=0, microsecond=0)
     if days_future is not None:
-        # Measured from the start of today, so this morning's articles still count.
-        start = timezone.localtime().replace(hour=0, minute=0, second=0, microsecond=0)
         queryset = queryset.filter(
-            time__gte=start, time__lte=start + datetime.timedelta(days=days_future)
+            time__gte=midnight, time__lte=midnight + datetime.timedelta(days=days_future)
+        )
+    if days_past is not None:
+        queryset = queryset.filter(
+            time__gte=midnight - datetime.timedelta(days=days_past),
+            time__lte=midnight + datetime.timedelta(days=1),
         )
 
     payload = [
@@ -75,9 +87,11 @@ def articles(request: HttpRequest) -> HttpResponse:
             "added_at": article.added_at.isoformat(),
             "website": article.website.slug if article.website else None,
         }
-        for article in queryset[:limit]
+        for article in queryset[offset : offset + limit]
     ]
-    return JsonResponse({"count": len(payload), "results": payload})
+    return JsonResponse(
+        {"count": len(payload), "offset": offset, "limit": limit, "results": payload}
+    )
 
 
 def _last_update() -> str | None:
