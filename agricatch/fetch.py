@@ -9,7 +9,7 @@ import threading
 import time
 from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 from urllib.parse import urljoin, urlparse
 
 import httpx
@@ -22,6 +22,12 @@ DEFAULT_MAX_PAGES = 100
 DEFAULT_CONCURRENCY = 4
 DEFAULT_MAX_BYTES = 25 * 1024 * 1024
 MAX_REDIRECTS = 5
+MAX_ATTEMPTS = 3
+BACKOFF_SECONDS = 1.0
+# 5xx and dropped connections are the server having a bad moment. 403 and 429
+# are decisions it made on purpose, and retrying them is just knocking harder
+# after being told no.
+RETRIABLE_STATUS = frozenset({500, 502, 503, 504})
 ALLOWED_SCHEMES = ("http", "https")
 USER_AGENT = "agricatch/2.0 (+https://github.com/AZdv/agricatch)"
 
@@ -92,12 +98,66 @@ def check_public_url(url: str) -> None:
             raise BlockedURL(f"refusing non-public address {address} for {url}")
 
 
+class _Transient(Exception):
+    """An failure worth another attempt, as opposed to an answer we were given."""
+
+
+def _fetch_once(
+    session: HTTPClient,
+    target: str,
+    headers: dict[str, str],
+    timeout: float,
+    max_bytes: int,
+) -> tuple[bytes | None, str | None]:
+    """One request. Returns ``(content, redirect_location)``; exactly one is set.
+
+    Raises :class:`_Transient` for a dropped connection or a 5xx, which are the
+    server having a bad moment. A status the server chose on purpose - 403, 429,
+    404 - comes back as FetchError and is never retried, because repeating it is
+    rude and will not help.
+    """
+    try:
+        with session.stream(
+            "GET", target, headers=headers, follow_redirects=False, timeout=timeout
+        ) as response:
+            if response.status_code in RETRIABLE_STATUS:
+                raise _Transient(f"{target} returned {response.status_code}")
+
+            if response.is_redirect:
+                location = response.headers.get("location")
+                if not location:
+                    raise FetchError(f"redirect without a location at {target}")
+                return None, location
+
+            response.raise_for_status()
+
+            declared = response.headers.get("content-length")
+            if declared and declared.isdigit() and int(declared) > max_bytes:
+                raise FetchError(f"{target} declares more than {max_bytes} bytes")
+
+            chunks: list[bytes] = []
+            total = 0
+            for chunk in response.iter_bytes():
+                total += len(chunk)
+                if total > max_bytes:
+                    raise FetchError(f"{target} returned more than {max_bytes} bytes")
+                chunks.append(chunk)
+            return b"".join(chunks), None
+
+    except httpx.HTTPStatusError as exc:
+        raise FetchError(f"could not fetch {target}: {exc}") from exc
+    except httpx.HTTPError as exc:
+        # Transport-level: timeouts, resets, DNS. Worth another go.
+        raise _Transient(str(exc)) from exc
+
+
 def fetch_bytes(
     url: str,
     *,
     timeout: float = DEFAULT_TIMEOUT,
     client: HTTPClient | None = None,
     max_bytes: int = DEFAULT_MAX_BYTES,
+    max_attempts: int = MAX_ATTEMPTS,
 ) -> bytes:
     """Return the raw body at ``url``.
 
@@ -114,41 +174,38 @@ def fetch_bytes(
     """
     headers = {"User-Agent": USER_AGENT}
     owned = client is None
-    session = client or httpx.Client(follow_redirects=False, timeout=timeout)
+    # httpx.Client.stream takes explicit keyword-only arguments, so it does not
+    # structurally match a **kwargs protocol even though it is exactly what we
+    # want. The protocol is there for the test doubles; this is the real thing.
+    session: HTTPClient = cast(
+        HTTPClient, client or httpx.Client(follow_redirects=False, timeout=timeout)
+    )
 
     try:
         target = url
         for _ in range(MAX_REDIRECTS + 1):
             check_public_url(target)
-            try:
-                with session.stream(
-                    "GET", target, headers=headers, follow_redirects=False, timeout=timeout
-                ) as response:
-                    if response.is_redirect:
-                        location = response.headers.get("location")
-                        if not location:
-                            raise FetchError(f"redirect without a location at {target}")
-                        # Relative Location headers are legal and common.
-                        target = urljoin(target, location)
-                        continue
 
-                    response.raise_for_status()
+            content: bytes | None = None
+            location: str | None = None
+            for attempt in range(1, max_attempts + 1):
+                try:
+                    content, location = _fetch_once(session, target, headers, timeout, max_bytes)
+                    break
+                except _Transient as exc:
+                    if attempt >= max_attempts:
+                        raise FetchError(
+                            f"could not fetch {target} after {max_attempts} attempts: {exc}"
+                        ) from exc
+                    logger.debug("%s: %s, retrying (%d/%d)", target, exc, attempt, max_attempts)
+                    time.sleep(BACKOFF_SECONDS * attempt)
 
-                    declared = response.headers.get("content-length")
-                    if declared and declared.isdigit() and int(declared) > max_bytes:
-                        raise FetchError(f"{target} declares more than {max_bytes} bytes")
+            if location is not None:
+                # Relative Location headers are legal and common.
+                target = urljoin(target, location)
+                continue
 
-                    chunks: list[bytes] = []
-                    total = 0
-                    for chunk in response.iter_bytes():
-                        total += len(chunk)
-                        if total > max_bytes:
-                            raise FetchError(f"{target} returned more than {max_bytes} bytes")
-                        chunks.append(chunk)
-            except httpx.HTTPError as exc:
-                raise FetchError(f"could not fetch {target}: {exc}") from exc
-
-            content = b"".join(chunks)
+            assert content is not None
             logger.debug("fetched %s (%d bytes)", target, len(content))
             return content
 

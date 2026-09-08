@@ -216,3 +216,72 @@ def test_an_external_entity_is_not_expanded_into_a_record(tmp_path: Path) -> Non
 
     record = importer.extract_record(nodes[0]) if nodes else None
     assert record is None or "canary" not in record.get("name", "")
+
+
+# ---- retrying only what is worth retrying ----------------------------
+
+
+class Flaky:
+    """Fails with the given statuses, then succeeds."""
+
+    def __init__(self, statuses: list[int]) -> None:
+        self.statuses = list(statuses)
+        self.attempts = 0
+
+    def stream(self, method: str, url: str, **kwargs: Any) -> StreamedResponse:
+        self.attempts += 1
+        request = httpx.Request(method, url)
+        if self.statuses:
+            return StreamedResponse(httpx.Response(self.statuses.pop(0), request=request))
+        return StreamedResponse(httpx.Response(200, content=b"ok", request=request))
+
+    def close(self) -> None:
+        return None
+
+
+def test_a_transient_server_error_is_retried() -> None:
+    client = Flaky([503, 500])
+    assert fetch_bytes(f"http://{PUBLIC_IP}/x", client=client, max_attempts=3) == b"ok"
+    assert client.attempts == 3
+
+
+def test_a_refusal_is_not_retried() -> None:
+    """403 is a decision, not a hiccup; repeating it is just knocking harder."""
+    client = Flaky([403, 403, 403])
+    with pytest.raises(FetchError, match="403"):
+        fetch_bytes(f"http://{PUBLIC_IP}/x", client=client, max_attempts=3)
+    assert client.attempts == 1
+
+
+def test_rate_limiting_is_not_retried_either() -> None:
+    client = Flaky([429, 429])
+    with pytest.raises(FetchError, match="429"):
+        fetch_bytes(f"http://{PUBLIC_IP}/x", client=client, max_attempts=3)
+    assert client.attempts == 1
+
+
+def test_a_dropped_connection_is_retried() -> None:
+    class Dropping:
+        def __init__(self) -> None:
+            self.attempts = 0
+
+        def stream(self, method: str, url: str, **kwargs: Any) -> StreamedResponse:
+            self.attempts += 1
+            if self.attempts < 3:
+                raise httpx.ConnectError("connection reset")
+            return StreamedResponse(
+                httpx.Response(200, content=b"ok", request=httpx.Request(method, url))
+            )
+
+        def close(self) -> None:
+            return None
+
+    client = Dropping()
+    assert fetch_bytes(f"http://{PUBLIC_IP}/x", client=client, max_attempts=3) == b"ok"
+    assert client.attempts == 3
+
+
+def test_giving_up_after_the_attempt_budget() -> None:
+    client = Flaky([503, 503, 503])
+    with pytest.raises(FetchError, match="503|attempts"):
+        fetch_bytes(f"http://{PUBLIC_IP}/x", client=client, max_attempts=3)
