@@ -59,11 +59,15 @@ python manage.py runserver
 
 | Path | What it does |
 |---|---|
-| `GET /agricatch/articles` | JSON list. `sort_by`, `days_future`, `limit`, `last_update` |
+| `GET /agricatch/articles` | JSON list. `sort_by`, `limit`, `offset`, `days_past`, `days_future`, `last_update` |
 | `GET /agricatch/article/<id>` | Single article |
 | `GET,POST /agricatch/importform` | Run an importer from the browser. Staff only |
 
 `sort_by` is checked against a fixed set of fields, since it ends up in `ORDER BY`.
+
+`days_past` and `days_future` both measure from the start of today. The forward
+one is inherited from the events project this began as, where "what is coming up"
+is the natural question; for a news feed `days_past` is usually the one you want.
 
 ## Writing an importer
 
@@ -133,6 +137,10 @@ are not negotiable:
   limit at all.
 - **No XML entity resolution.** A feed containing
   `<!ENTITY x SYSTEM "file:///etc/passwd">` gets an empty field, not the file.
+- **Retries only what is worth retrying.** A dropped connection or a 5xx gets
+  another go after a backoff. A 403 or 429 does not: those are decisions the
+  server made on purpose, and repeating them is just knocking harder after
+  being told no.
 
 The address check has a known limit worth stating plainly: it resolves the name,
 approves it, and the connection then resolves it again, so a domain that answers
@@ -295,6 +303,14 @@ anyone else's articles; the kidsil ones are real captures of my own site. See
 
 The `live` suite is what tells you a source has changed its layout. Worth running when
 an importer starts returning nothing.
+
+It distinguishes two things that look identical from the outside. If a source
+answers 403 or 429 the run **skips** with that reason, because being turned away
+is an access decision and not something a code change fixes. It only **fails** when
+a source was reachable and still yielded nothing, which is the case that means the
+markup moved. Gizmodo refuses GitHub's runners while serving an ordinary
+connection happily, and treating that as a broken importer made the scheduled run
+red every week until nobody read it.
 
 CI runs the first four on every push across Python 3.11 to 3.13, and checks that the
 migrations match the models. The live suite runs weekly on its own schedule rather
